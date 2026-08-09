@@ -212,3 +212,12 @@ NOT window-stitching (4x22 fits single forward). Restarted as runs/v1b on
 v1-synthetic (16k) + selfsup-v1 real-music windows (8.4k, 512-note, nASAP
 train split), 24 epochs, matchability on. Expect ~13-16 min/epoch, done in
 the night. Autopilot updated to supervise v1b.
+
+**~18:15 LEAKAGE FIX.** selfsup corpus used md5-hash split, not the MAESTRO
+test split → real-music windows from test pieces were in v1b's training mix.
+Stopped v1b; regenerating selfsup-v2 with --exclude-folders (39 MAESTRO-test
+folders, eval/split.py; robust∩test = 84 perfs / 27 pieces is the headline
+eval set). Autopilot now gates v1c training on selfsup-v2 completion. Also:
+domain-gap diagnostics — real 4x22 perf IOI median 16ms (thick chords) vs
+synthetic 153ms; velocities 39 vs 73; lengths 731 vs 101 notes. Real-music
+selfsup windows carry exactly these stats → v1c should close the gap.
