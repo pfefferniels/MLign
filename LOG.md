@@ -221,3 +221,13 @@ eval set). Autopilot now gates v1c training on selfsup-v2 completion. Also:
 domain-gap diagnostics — real 4x22 perf IOI median 16ms (thick chords) vs
 synthetic 153ms; velocities 39 vs 73; lengths 731 vs 101 notes. Real-music
 selfsup windows carry exactly these stats → v1c should close the gap.
+
+**~18:35 W7 ping received + ornament wiring shipped.** PerformedNote gains
+ornamented/ornamentRef/Source/Slot/Pass/Anchor at merge; carved heads =
+matches w/ altered duration (keep score id); expandOrnaments flag for
+ablations. Generator now has normalizeOrnaments pre-pass (generated ⇔
+ornamentSlot!==null → id=null + ornament origin; robustness copy-chain
+inherits anchor) + orn rows [pi, anchor_si, slot, pass] in corpus format.
+Forward-compatible no-op verified on current main (5-piece smoke + 10/10
+robustness tests). Exaggeration agent adopted R1-R6 + global scope.
+v1c training live (16k syn + 7420 leakage-free selfsup).
