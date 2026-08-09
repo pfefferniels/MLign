@@ -137,3 +137,12 @@ prompt in transcript ~17:10 relaunch); (4) monitor on runs/v0-syn/log.jsonl;
 (5) after training: eval model via src/mlign/infer.py align_with_model on
 nASAP, compare vs dualdtw number. Peers owe us pings: meico-ts-09 (W7 facade
 + merge), mpmify-32 (fixed espressivo dist after E1/E2; factored samplers).
+
+**~15:45 Memory war resolved.** mpmify agent trains its own model on this
+machine (caffeinate train.py v31); my featurize-all-upfront dataset + their
+job + 2 parangonar evals = swap death. Fixes: CorpusBatcher lazy featurization
+(per-batch, ~1ms/row/epoch), training restarted nice -10, dualdtw eval
+deferred until a machine gap (coordinating schedule with mpmify-32). CLI
+shipped meanwhile: mlign align MEI/MusicXML+MIDI → json/match/jsonl, E2E green
+on espressivo-rendered fixture (MEI bridge = node subprocess regex over MSM;
+score xml:ids preserved). selfsup-v1 (10 windows/file) generating.
