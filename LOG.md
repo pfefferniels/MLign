@@ -35,3 +35,12 @@ NO mpm — that path renders performed attributes verbatim).
 code-study (parangonar/TheGlueNote/AlignmentTool internals + baseline
 runnability), espressivo-study (facade/MPM coverage details). Reports →
 research/01..03-*.md.
+
+**~12:00 Robustness layer v1 shipped** (src/robustness/: rng.mjs, robustness.mjs,
+gt.mjs + 8 invariant tests green). Pure fn (data, config, seed) → {data, edits};
+ops delete/insert/substitute/shift/restart/skip; provenance travels on inserted
+notes (origin field), inherited through copy-of-copy chains; GT flattener
+editsToAlignment → parangonar-style match/insertion/deletion + perfNotes list
+(p0..pN in global onset order). E2E against real espressivo render: clean.
+GT convention: replay pass keeps score ids (matches), botched first attempt =
+insertions — mirrors nASAP annotation practice.
