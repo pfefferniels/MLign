@@ -205,3 +205,10 @@ denied by permission classifier — wakeup loop invokes autopilot.sh instead.
 val: match F 0.936 (classical baseline: 0.933), del F 0.56 (bl 0.42), ins F
 0.40 (bl 0.46). Model+decode wiring proven end-to-end; 29 epochs of headroom.
 Bar-B benchmark now has contiguous mode (TheGlueNote OOD protocol).
+
+**~17:20 Domain gap found and addressed.** v1 epoch-1 ckpt: 0.942 synthetic
+val but 0.778 on real 4x22 (my classical baseline: 0.986) — style+length gap,
+NOT window-stitching (4x22 fits single forward). Restarted as runs/v1b on
+v1-synthetic (16k) + selfsup-v1 real-music windows (8.4k, 512-note, nASAP
+train split), 24 epochs, matchability on. Expect ~13-16 min/epoch, done in
+the night. Autopilot updated to supervise v1b.
