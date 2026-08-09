@@ -35,6 +35,10 @@ export const defaultConfig = Object.freeze({
   shift: { rate: 0, stdMs: 35, hesitationP: 0.15, hesitationMs: [90, 300] },
   restart: { lambda: 0, spanMs: [800, 4000], gapMs: [250, 1500], dropLastP: 0.5 },
   skip: { lambda: 0, spanMs: [500, 3000], hesitationMs: [60, 250] },
+  // GT-neutral humanizer: Gaussian onset/offset noise on EVERY note, unlogged
+  // (alignment is unchanged by it). Deterministic replacement for espressivo's
+  // unseedable imprecision maps. offsetStdMs defaults to onset's std.
+  jitter: { stdMs: 0, offsetStdMs: null },
 });
 
 export const presetLight = mergeConfig({
@@ -141,6 +145,20 @@ export function applyRobustness(data, config, seed) {
       kept.push(note);
     }
     part.notes = kept.concat(inserted);
+  }
+
+  // GT-neutral timing jitter, after all identity-bearing ops.
+  if (cfg.jitter.stdMs > 0) {
+    const offStd = cfg.jitter.offsetStdMs ?? cfg.jitter.stdMs;
+    for (const part of parts) {
+      for (const n of part.notes) {
+        n.milliseconds.date += normal(rng, 0, cfg.jitter.stdMs);
+        n.milliseconds.end += normal(rng, 0, offStd);
+        if (n.milliseconds.end < n.milliseconds.date + 8) {
+          n.milliseconds.end = n.milliseconds.date + 8; // keep a sounding note
+        }
+      }
+    }
   }
 
   // Clamp into non-negative time (a shift can push the first onset below 0)

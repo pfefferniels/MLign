@@ -161,3 +161,26 @@ test('shiftToMatchedZero puts the first matched onset at 0 with earlier insertio
   }
   assert.ok(perfNotes.every((n) => n.onsetMs >= 0), 'absolute emission stays non-negative');
 });
+
+test('jitter moves timings but leaves the alignment GT untouched', () => {
+  const piece = makePiece(40);
+  const base = applyRobustness(piece, { delete: { rate: 2 }, insert: { rate: 2 } }, 31);
+  const jit = applyRobustness(piece, { delete: { rate: 2 }, insert: { rate: 2 }, jitter: { stdMs: 25 } }, 31);
+  const a = editsToAlignment(base.data, base.edits);
+  const b = editsToAlignment(jit.data, jit.edits);
+  // perfIds are onset-ordinal and may legitimately reorder under jitter;
+  // compare the identity-stable views instead.
+  const view = (x) => ({
+    matches: x.alignment.filter((r) => r.label === 'match').map((r) => r.scoreId).sort(),
+    deletions: x.alignment.filter((r) => r.label === 'deletion').map((r) => r.scoreId).sort(),
+    insertions: x.alignment
+      .filter((r) => r.label === 'insertion')
+      .map((r) => `${r.provenance.type}:${r.provenance.near ?? r.provenance.sourceId ?? ''}`)
+      .sort(),
+  });
+  assert.deepEqual(view(a), view(b));
+  const onsetsA = a.perfNotes.map((n) => n.onsetMs);
+  const onsetsB = b.perfNotes.map((n) => n.onsetMs);
+  assert.notDeepEqual(onsetsA, onsetsB, 'jitter must move onsets');
+  for (const n of b.perfNotes) assert.ok(n.offsetMs >= n.onsetMs + 8);
+});
