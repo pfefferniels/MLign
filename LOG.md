@@ -305,3 +305,15 @@ validated; model's edge = ins/del handling (pooled gap) + hard files.
   will teach these); (iii) dualdtw comparison runs in gap; (iv) Batik + nASAP
   robust-test model runs in gap; (v) nASAP repeat subset (110 perfs) for
   Bar C at scale; (vi) exaggeration + ornament corpus integration on pings.
+
+**~23:00 ORNAMENT GT LIVE.** meico-ts merge 05147ed verified: hand-built v3
+trill through performMsmToData yields generated notes w/ ornamented/ref/slot/
+anchor + principal keeps id INSIDE figure (slot!) → detection must be
+score-id-set membership, not slot (fixed). Ornament sampler shipped
+(--ornaments rate: trill 2-4 alternations / mordent / turn on long notes,
+frameLength 30-100%). 20-piece smoke: 340 orn notes with (pi, anchor_si,
+slot, pass) rows, invariants green. v2orn-{light,medium} 4000-piece shards
+generating detached (seeds 6000/7000). Plan: warm-start training from v1c
+weights with v1+v2orn+selfsup mix once shards land (resume mechanism carries
+optimizer state; architecture unchanged). Ornament-role head later; for now
+kind-2 insertions teach trill handling (the 4x22 ins-F gap).
