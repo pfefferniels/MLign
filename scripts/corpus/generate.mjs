@@ -53,10 +53,44 @@ const OPT = { twoPartProb: 0.5, asynchronyProb: 1.0, movementProb: 0.5 };
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
+/**
+ * Ornament pre-pass over the facade's PerformanceData (meico-ts W7 fields;
+ * on pre-W7 dists every field is undefined → identity).
+ *
+ * Generated notes (ornamentSlot !== null per the W7 contract — carved heads
+ * carry only ornamented+ornamentRef) get id=null + an ornament origin, so the
+ * robustness layer and editsToAlignment treat them as provenanced insertions;
+ * their random meico_<uuid> ids must never be mistaken for score identities.
+ * Carved heads keep their score id (a match with altered duration — D10).
+ */
+export function normalizeOrnaments(data) {
+  let touched = false;
+  const parts = data.parts.map((part) => ({
+    ...part,
+    notes: part.notes.map((n) => {
+      if (n.ornamentSlot === null || n.ornamentSlot === undefined) return n;
+      touched = true;
+      return {
+        ...n,
+        id: null,
+        origin: {
+          type: 'ornament',
+          anchor: n.ornamentAnchor ?? null,
+          ref: n.ornamentRef ?? null,
+          slot: n.ornamentSlot,
+          pass: n.ornamentPass ?? 0,
+        },
+      };
+    }),
+  }));
+  return touched ? { ...data, parts } : data;
+}
+
 /** One corpus row, or null when an invariant fails. */
 export function buildSample(piece, robustnessCfg, seedStr) {
   const { msm, mpm } = documentsFor(piece);
-  const clean = captureConsole(() => performMsmToData({ msm, mpm })).value;
+  const rendered = captureConsole(() => performMsmToData({ msm, mpm })).value;
+  const clean = normalizeOrnaments(rendered);
 
   const { data, edits } = applyRobustness(clean, robustnessCfg, seedStr);
   const { alignment, perfNotes, unattributed } = editsToAlignment(data, edits);
@@ -77,6 +111,7 @@ export function buildSample(piece, robustnessCfg, seedStr) {
   const align = [];
   const subs = [];
   const ins = [];
+  const orn = [];
   const del = [];
   const INS_KIND = { slip: 0, 'restart-first-pass': 1, ornament: 2 };
   for (const rec of alignment) {
@@ -90,6 +125,10 @@ export function buildSample(piece, robustnessCfg, seedStr) {
       const p = pi.get(rec.perfId);
       if (p === undefined) return null;
       ins.push([p, INS_KIND[rec.provenance.type] ?? 3]);
+      if (rec.provenance.type === 'ornament') {
+        const anchorSi = rec.provenance.anchor !== null ? si.get(rec.provenance.anchor) : undefined;
+        orn.push([p, anchorSi ?? -1, rec.provenance.slot, rec.provenance.pass]);
+      }
     } else {
       const s = si.get(rec.scoreId);
       if (s === undefined) return null;
@@ -109,6 +148,7 @@ export function buildSample(piece, robustnessCfg, seedStr) {
     align,
     subs,
     ins,
+    orn,
     del: del.map(([s]) => s),
   };
 }

@@ -207,7 +207,7 @@ function applyRestart(parts, cfg, rng, edits) {
         // stable key. When this restart re-copies an earlier insertion
         // (copy-of-copy, or a slip), the score reference is inherited through
         // its origin so provenance always bottoms out at a real score id.
-        const sourceId = note.id ?? note.origin?.sourceId ?? note.origin?.near ?? null;
+        const sourceId = note.id ?? note.origin?.sourceId ?? note.origin?.near ?? note.origin?.anchor ?? null;
         copy.id = null;
         copy.origin = { type: 'restart-first-pass', sourceId, t0 };
         copy.velocity = clampVelocity(Math.round(copy.velocity * uniform(rng, 0.8, 1.0)));
