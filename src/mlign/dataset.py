@@ -137,28 +137,34 @@ def collate(samples: list[dict], device: str = "cpu") -> dict:
 
 
 class CorpusBatcher:
-    """Token-budgeted batches over featurized rows, shuffled each epoch."""
+    """Token-budgeted batches, shuffled each epoch.
+
+    Featurization is LAZY (per batch, each epoch): raw rows are compact JSON
+    dicts, while featurized samples hold ~7 numpy arrays each — on an 8 GB
+    machine shared with other training jobs, holding 16k featurized rows
+    resident caused swap-death. ~1 ms/row per epoch is the cheap side of that
+    trade.
+    """
 
     def __init__(self, rows: list[dict], max_tokens: int = 6000, seed: int = 0):
-        self.samples = [featurize(r) for r in rows]
+        self.rows = rows
+        self.sizes = [2 + len(r["score"]) + len(r["perf"]) for r in rows]
         self.max_tokens = max_tokens
         self.rng = np.random.default_rng(seed)
 
     def __iter__(self):
-        order = self.rng.permutation(len(self.samples))
+        order = self.rng.permutation(len(self.rows))
         batch: list[dict] = []
         tokens = 0
         for i in order:
-            s = self.samples[i]
-            t = 2 + s["n"] + s["m"]
+            t = self.sizes[i]
             if batch and tokens + t > self.max_tokens:
-                yield batch
+                yield [featurize(self.rows[j]) for j in batch]
                 batch, tokens = [], 0
-            batch.append(s)
+            batch.append(i)
             tokens += t
         if batch:
-            yield batch
+            yield [featurize(self.rows[j]) for j in batch]
 
     def __len__(self):
-        total = sum(2 + s["n"] + s["m"] for s in self.samples)
-        return max(1, math.ceil(total / self.max_tokens))
+        return max(1, math.ceil(sum(self.sizes) / self.max_tokens))
