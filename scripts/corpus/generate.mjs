@@ -14,7 +14,7 @@
  * invariant are dropped (counted in the final summary line on stderr).
  */
 
-import { createWriteStream } from 'node:fs';
+import { appendFileSync, openSync, closeSync, writeSync } from 'node:fs';
 import { JavaRandom } from '/Users/nielspfeffer/Projects/mpmify/ml/node/java_random.mjs';
 import {
   samplePieceV4,
@@ -119,7 +119,11 @@ function main() {
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
   const cfg = mergeConfig({ ...preset, jitter: { stdMs: args.jitter } });
 
-  const out = createWriteStream(args.out);
+  // Synchronous writes: the generation loop is pure sync compute and never
+  // yields to the event loop, so a stream would buffer EVERYTHING in memory
+  // until end() — one kill loses the whole shard (it did). writeSync persists
+  // each row immediately.
+  const fd = openSync(args.out, 'w');
   let written = 0;
   let dropped = 0;
   for (let i = 0; i < args.n; i++) {
@@ -136,13 +140,12 @@ function main() {
       dropped++;
       continue;
     }
-    out.write(JSON.stringify(row) + '\n');
+    writeSync(fd, JSON.stringify(row) + '\n');
     written++;
     if ((i + 1) % 50 === 0) process.stderr.write(`...${i + 1}/${args.n}\n`);
   }
-  out.end(() => {
-    process.stderr.write(`wrote ${written} samples to ${args.out} (${dropped} dropped)\n`);
-  });
+  closeSync(fd);
+  process.stderr.write(`wrote ${written} samples to ${args.out} (${dropped} dropped)\n`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();
