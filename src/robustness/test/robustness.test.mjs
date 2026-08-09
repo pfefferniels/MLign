@@ -145,3 +145,19 @@ test('onsets never go negative and parts stay onset-sorted', () => {
     }
   }
 });
+
+test('shiftToMatchedZero puts the first matched onset at 0 with earlier insertions negative', async () => {
+  const { shiftToMatchedZero } = await import('../gt.mjs');
+  const piece = makePiece(30);
+  const cfg = mergeConfig({ restart: { lambda: 6 }, insert: { rate: 8 } });
+  const { data, edits } = applyRobustness(piece, cfg, 17);
+  const { alignment, perfNotes } = editsToAlignment(data, edits);
+  const shifted = shiftToMatchedZero(perfNotes, alignment);
+  const matched = new Set(alignment.filter((r) => r.label === 'match').map((r) => r.perfId));
+  const firstMatched = shifted.find((n) => matched.has(n.perfId));
+  assert.equal(firstMatched.onsetMs, 0);
+  for (let i = 1; i < shifted.length; i++) {
+    assert.ok(shifted[i].onsetMs >= shifted[i - 1].onsetMs, 'order preserved');
+  }
+  assert.ok(perfNotes.every((n) => n.onsetMs >= 0), 'absolute emission stays non-negative');
+});

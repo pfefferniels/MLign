@@ -77,3 +77,24 @@ export function editsToAlignment(editedData, edits) {
 
   return { alignment, perfNotes, unattributed };
 }
+
+/**
+ * Clock convention adapter (contract with the mpmify ML program, 2026-08-09):
+ * `editsToAlignment` emits ABSOLUTE facade milliseconds (lossless; never
+ * negative, applyRobustness clamps the piece to ≥ 0). The mpmify JSONL
+ * convention instead sets the first MATCHED note's onset to 0.0, with events
+ * before it (e.g. a restart's degraded first pass, real-data pre-onset noise)
+ * at negative ms. This returns a fresh perfNotes list in that convention.
+ */
+export function shiftToMatchedZero(perfNotes, alignment) {
+  const matchedPerfIds = new Set(
+    alignment.filter((r) => r.label === 'match').map((r) => r.perfId),
+  );
+  let zero = null;
+  for (const n of perfNotes) {
+    // perfNotes is in global onset order — the first matched row is the zero.
+    if (matchedPerfIds.has(n.perfId)) { zero = n.onsetMs; break; }
+  }
+  if (zero === null || zero === 0) return perfNotes.map((n) => ({ ...n }));
+  return perfNotes.map((n) => ({ ...n, onsetMs: n.onsetMs - zero, offsetMs: n.offsetMs - zero }));
+}

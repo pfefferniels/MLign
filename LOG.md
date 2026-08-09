@@ -44,3 +44,13 @@ editsToAlignment → parangonar-style match/insertion/deletion + perfNotes list
 (p0..pN in global onset order). E2E against real espressivo render: clean.
 GT convention: replay pass keeps score ids (matches), botched first attempt =
 insertions — mirrors nASAP annotation practice.
+
+**~12:30 Clock convention pinned with mpmify** (their review passed all tests):
+editsToAlignment emits absolute facade ms (≥0); shiftToMatchedZero(perfNotes,
+alignment) converts to their convention (first matched onset = 0.0, earlier
+insertions negative). Test invocation pinned: node --test 'src/robustness/test/*.mjs'
+(bare dir form phantom-fails on Node 23). 9/9 tests.
+
+**Datasets landed** (data/benchmarks/, gitignored): asap-dataset 1.9G sparse
+(no audio), batik_plays_mozart 120M, vienna4x22 23M (match/ dir present).
+Disk after: ~10G free — corpus budget must stay small; stream + gzip.
