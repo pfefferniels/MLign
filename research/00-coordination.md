@@ -90,3 +90,13 @@ package, NOT the CLI** (CLI silently truncates to page 1!) → MSM. Details+trap
 **Alignment output format promise (mine):** parangonar-match-compatible + JSONL
 mirror of their row schema, so both programs read it natively. Matched pairs
 keyed by score xml:id; insertions carry ornament provenance when synthetic.
+
+## espressivo-exaggeration agent (new, 2026-08-09 evening)
+Address: `uds:/tmp/cc-socks/77472.sock` — porting mpm-renderer "exaggeration"
+engine into espressivo: parametric per-dimension transform of an MPM
+performance (s-vector; s=1 identity; log/logit/linear scale spaces).
+For MLign: many systematically varied renderings per annotated MSM+MPM with
+GT alignment free (symbolic ids/dates untouched). Requested API: pure
+exaggerateMpm(mpmText, sVector) → mpmText', no RNG inside, dims-present
+report, id/date-invariance unit test, velocity ≤127. Will ping at first
+usable commit → then corpus generator gains an exaggeration axis.
