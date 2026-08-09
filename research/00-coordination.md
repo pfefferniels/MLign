@@ -100,3 +100,7 @@ GT alignment free (symbolic ids/dates untouched). Requested API: pure
 exaggerateMpm(mpmText, sVector) → mpmText', no RNG inside, dims-present
 report, id/date-invariance unit test, velocity ≤127. Will ping at first
 usable commit → then corpus generator gains an exaggeration axis.
+Update: R1-R6 adopted verbatim; + `global` scope (level-spread around geometric
+mean — piecewise-constant maps would otherwise no-op), per-dim center override,
+exact composition s1∘s2 = s1·s2, clamp events surfaced in report (drop
+saturated samples).
