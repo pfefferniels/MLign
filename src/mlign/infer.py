@@ -154,7 +154,11 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
     sm_p = _softmax(b, axis=1)[:, :n]
     conf = sm_s * sm_p.T  # (n, m)
 
-    # --- phase 1: anchors → monotone map
+    # --- phase 1: monotone time map.
+    # Primary evidence: mutual high-confidence pitch-equal anchors. Fallback /
+    # reinforcement: cluster-level DTW over blended cost (model confidence +
+    # pitch-set Jaccard) — TheGlueNote's ablation shows the DTW path over the
+    # confidence matrix carries weak models; anchors alone collapse there.
     best_p = conf.argmax(axis=1)
     best_s = conf.argmax(axis=0)
     anchors = []
@@ -164,11 +168,18 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
             anchors.append((i, j))
     anchors = _monotone_subset(anchors, s_onset, p_onset)
 
-    if len(anchors) >= 2:
-        ax = np.array([s_onset[i] for i, _ in anchors])
-        ay = np.array([p_onset[j] for _, j in anchors])
+    dtw_ax, dtw_ay = _cluster_dtw_map(s_onset, s_pitch, p_onset, p_pitch, conf)
+
+    # Union, not choice: the DTW path densifies the gaps between sparse
+    # anchors (33 anchors over 450 notes leave multi-second interpolation
+    # holes); anchors sharpen the path where the model is confident.
+    ax = np.concatenate([dtw_ax, [s_onset[i] for i, _ in anchors]])
+    ay = np.concatenate([dtw_ay, [p_onset[j] for _, j in anchors]])
+    order = np.argsort(ax, kind="stable")
+    ax, ay = ax[order], ay[order]
+    if len(ax) >= 2:
         ax, keep = np.unique(ax, return_index=True)
-        ay = ay[keep]
+        ay = np.asarray(ay)[keep]
         def s2p_time(x):
             return np.interp(x, ax, ay)
     else:
@@ -209,6 +220,61 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
             null_share = float(_softmax(np.concatenate([sim[:, j], [null_p[j]]]), axis=0)[-1])
             triples.append({"label": "insertion", "perf_idx": j, "confidence": null_share})
     return triples
+
+
+def _cluster_dtw_map(s_onset, s_pitch, p_onset, p_pitch, conf):
+    """Onset-cluster DTW with cost = 0.5·(1−Jaccard) + 0.5·(1−mean conf).
+    Returns (score onsets, perf onsets) along the path — a dense monotone map
+    that works even when the model is weak (pitch evidence) and sharpens as
+    the model improves (confidence evidence)."""
+    s_bounds = np.flatnonzero(np.diff(s_onset) > 1e-9) + 1
+    s_clusters = np.split(np.arange(len(s_onset)), s_bounds)
+    p_bounds = np.flatnonzero(np.diff(p_onset) > 0.05) + 1
+    p_clusters = np.split(np.arange(len(p_onset)), p_bounds)
+
+    ns, mp = len(s_clusters), len(p_clusters)
+    s_sets = [frozenset(int(x) for x in s_pitch[c]) for c in s_clusters]
+    p_sets = [frozenset(int(x) for x in p_pitch[c]) for c in p_clusters]
+
+    cost = np.empty((ns, mp), dtype=np.float32)
+    for i, sc in enumerate(s_clusters):
+        ss = s_sets[i]
+        conf_rows = conf[sc]
+        for j, pc in enumerate(p_clusters):
+            ps = p_sets[j]
+            union = len(ss | ps)
+            jac = len(ss & ps) / union if union else 0.0
+            c_conf = float(conf_rows[:, pc].mean())
+            cost[i, j] = 0.5 * (1.0 - jac) + 0.5 * (1.0 - min(1.0, c_conf * 20.0))
+
+    GAP = 0.6
+    acc = np.full((ns + 1, mp + 1), np.inf, dtype=np.float32)
+    acc[0, 0] = 0.0
+    acc[0, 1:] = np.cumsum(np.full(mp, GAP))
+    acc[1:, 0] = np.cumsum(np.full(ns, GAP))
+    for i in range(1, ns + 1):
+        row = cost[i - 1]
+        prev = acc[i - 1]
+        cur = acc[i]
+        for j in range(1, mp + 1):
+            cur[j] = min(prev[j - 1] + row[j - 1], prev[j] + GAP, cur[j - 1] + GAP)
+
+    ax, ay = [], []
+    i, j = ns, mp
+    while i > 0 and j > 0:
+        d = acc[i - 1, j - 1] + cost[i - 1, j - 1]
+        v = acc[i - 1, j] + GAP
+        h = acc[i, j - 1] + GAP
+        best = min(d, v, h)
+        if best == d:
+            ax.append(float(s_onset[s_clusters[i - 1][0]]))
+            ay.append(float(p_onset[p_clusters[j - 1][0]]))
+            i, j = i - 1, j - 1
+        elif best == v:
+            i -= 1
+        else:
+            j -= 1
+    return np.array(ax[::-1]), np.array(ay[::-1])
 
 
 def _softmax(x, axis):
