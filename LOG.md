@@ -317,3 +317,11 @@ generating detached (seeds 6000/7000). Plan: warm-start training from v1c
 weights with v1+v2orn+selfsup mix once shards land (resume mechanism carries
 optimizer state; architecture unchanged). Ornament-role head later; for now
 kind-2 insertions teach trill handling (the 4x22 ins-F gap).
+
+**~23:40 v2 warm-start.** v1c e3 (val_acc .784): clean 0.99674 / mismatch
+0.9751 / ins-F 0.727 — plateau on benchmarks while val climbs (benchmark
+bottleneck = repeated chords + trill insertions, exactly what v2orn data
+teaches). Stopped v1c; v2 = warm-start from e3 weights on v1(16k) +
+v2orn(8k, --ornaments 0.5) + selfsup-v2(7.4k) ≈ 31.4k rows. Autopilot →
+runs/v2. Epochs est. ~85-95 min under contention. mpmify still training
+(no gap yet — their 21:00-24:00 estimate may slip).
