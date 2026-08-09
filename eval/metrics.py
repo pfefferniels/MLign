@@ -71,6 +71,34 @@ def pooled_prf(truth: Alignment, pred: Alignment) -> tuple[float, float, float]:
     return p, r, f
 
 
+def asynchrony(truth: Alignment, pred: Alignment, perf_onset_sec: dict) -> dict:
+    """Timing agreement (parangonar's second metric family, note-level form):
+    for every score note matched in BOTH truth and prediction, the absolute
+    difference between the performed onsets of the two chosen performance
+    notes. Perfect alignment → all zeros. Reports median + fraction within
+    25/50/100 ms over the common score notes."""
+    t_map = {s: p for (s, p) in truth.matches}
+    p_map = {s: p for (s, p) in pred.matches}
+    diffs = []
+    for s, tp in t_map.items():
+        pp = p_map.get(s)
+        if pp is None or tp not in perf_onset_sec or pp not in perf_onset_sec:
+            continue
+        diffs.append(abs(perf_onset_sec[tp] - perf_onset_sec[pp]))
+    if not diffs:
+        return {"n": 0, "median_ms": None, "lt25": None, "lt50": None, "lt100": None}
+    diffs.sort()
+    n = len(diffs)
+    frac = lambda t: sum(1 for d in diffs if d < t) / n  # noqa: E731
+    return {
+        "n": n,
+        "median_ms": round(diffs[n // 2] * 1000, 2),
+        "lt25": round(frac(0.025), 4),
+        "lt50": round(frac(0.05), 4),
+        "lt100": round(frac(0.1), 4),
+    }
+
+
 def macro_average(scores: list[AlignmentScore]) -> dict:
     """Mean-over-performances of each class F (parangonar's headline numbers)."""
 
