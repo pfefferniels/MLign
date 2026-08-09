@@ -16,14 +16,19 @@ for p in none light medium heavy; do
   fi
 done
 
-# 2. When all shards are complete and no generator runs, ensure training runs.
-total=$(cat data/corpus/v1-*.jsonl 2>/dev/null | wc -l)
-if [ "$total" -ge 15900 ] && ! pgrep -f "generate.mjs" > /dev/null; then
+# 2. When synthetic shards + leakage-free selfsup are complete, ensure v1c training.
+syn=$(cat data/corpus/v1-*.jsonl 2>/dev/null | wc -l)
+ss=$( [ -f data/corpus/selfsup-v2.jsonl ] && wc -l < data/corpus/selfsup-v2.jsonl || echo 0 )
+gen_running=""
+pgrep -f "generate.mjs" > /dev/null && gen_running=1
+pgrep -f "corpus/selfsup.py" > /dev/null && gen_running=1
+if [ "$syn" -ge 15900 ] && [ "$ss" -ge 6000 ] && [ -z "$gen_running" ]; then
   if ! pgrep -f "train.py --corpus" > /dev/null; then
-    log "starting v1 training (corpus rows: $total)"
+    log "starting v1c training (syn $syn + selfsup $ss rows)"
     mkdir -p runs
     nohup nice -n 10 .venv/bin/python -W ignore scripts/train.py \
-      --corpus 'data/corpus/v1-*.jsonl,data/corpus/selfsup-v1.jsonl' --epochs 24 --device cpu --threads 4 \
-      --matchability --run runs/v1b > runs/v1b.out 2>&1 &
+      --corpus 'data/corpus/v1-*.jsonl,data/corpus/selfsup-v2.jsonl' \
+      --epochs 24 --device cpu --threads 4 \
+      --matchability --run runs/v1c > runs/v1c.out 2>&1 &
   fi
 fi

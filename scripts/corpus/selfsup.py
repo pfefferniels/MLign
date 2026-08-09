@@ -203,12 +203,22 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--exclude-test", action="store_true",
                     help="drop files whose piece dir hashes to val/test")
+    ap.add_argument("--exclude-folders", default="",
+                    help="file with piece folders (relative to asap root) to exclude, one per line")
     args = ap.parse_args()
 
     files = sorted(globmod.glob(args.glob, recursive=True))
     files = [f for f in files if not f.endswith("midi_score.mid")]
     if args.exclude_test:
         files = [f for f in files if piece_split(str(Path(f).parent)) == "train"]
+    if args.exclude_folders:
+        excl = {l.strip() for l in open(args.exclude_folders) if l.strip()}
+        before = len(files)
+        files = [
+            f for f in files
+            if not any(folder in str(Path(f).parent).replace("\\", "/") for folder in excl)
+        ]
+        print(f"excluded {before - len(files)} files via folder list", file=sys.stderr)
     print(f"{len(files)} files", file=sys.stderr)
 
     written = 0
