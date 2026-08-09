@@ -96,3 +96,17 @@ build upstream for fair baseline. Velocity trap (fitVelocities) avoided:
 samplers stay ≤115. espressivo E1/E2 defects confirmed at HEAD; corpus v1
 after fix (v0 GT still valid). Java RenderMpm --batch = 10x faster render
 path, adapter liftable from mpmify ml/node/augmented_msm.mjs.
+
+**~16:45 STATE SNAPSHOT (compaction insurance).** Corpus v0 complete:
+16k synthetic pieces (data/corpus/v0-{none,light,medium,heavy}.jsonl, 105MB,
+0 dropped) + selfsup source ported (scripts/corpus/selfsup.py; reorder() port
+w/ trill-length bugfix; piece-level split by md5(piece_dir)%10: <8 train,
+8 val, 9 test — journaled convention). Background jobs running:
+- training v0-syn: scripts/train.py on 16k synthetic, 30 epochs → runs/v0-syn
+  (best.pt/last.pt, log.jsonl; resumable via --run)
+- selfsup corpus: → data/corpus/selfsup-v0.jsonl (nASAP train-split only)
+- DualDTW full eval → eval/results/dualdtw-full.json (THE bar; smoke: 0.9945)
+- my DTW baseline full eval → eval/results/baseline-full.json
+NEXT after training: inference+decode pipeline (windowed, two-phase decode per
+DESIGN §4) → eval on nASAP vs dualdtw number → iterate (features, +selfsup
+data, substitution head; ornament data after meico-ts W7 ping).
