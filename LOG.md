@@ -231,3 +231,8 @@ inherits anchor) + orn rows [pi, anchor_si, slot, pass] in corpus format.
 Forward-compatible no-op verified on current main (5-piece smoke + 10/10
 robustness tests). Exaggeration agent adopted R1-R6 + global scope.
 v1c training live (16k syn + 7420 leakage-free selfsup).
+
+**~18:50 v1c status:** single trainer (no restart loop), epoch 0 ≈42+ min
+(mixed corpus ~11M tokens/epoch). 24 epochs ≈ 17h on CPU under contention —
+acceptable for overnight; evaluate per-epoch checkpoints and reassess at
+epoch ~4. Machine swap 5.3/6GB used; trainer holds ~0.9GB at 137% CPU.
