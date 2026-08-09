@@ -37,23 +37,39 @@ from run_4x22 import NPZ_DIR, load_npz  # noqa: E402
 from mlign.tables import PerfTable  # noqa: E402
 
 
-def apply_mismatch(perf: PerfTable, truth: Alignment, rate: float, seed: int):
+def apply_mismatch(perf: PerfTable, truth: Alignment, rate: float, seed: int,
+                   mode: str = "contiguous"):
+    """mode='contiguous' reproduces TheGlueNote's OOD condition (ISMIR 2024
+    §5): extended contiguous mismatch segments — one deleted span (the
+    performance omits a passage) + one inserted span (a passage not in the
+    score), each ~rate/2 of the notes. mode='uniform' scatters instead."""
     rng = np.random.default_rng(seed)
     notes = perf.notes
     m = len(notes)
 
-    # deletions of performed notes
-    k_del = int(rate * m)
-    del_idx = set(rng.choice(m, size=k_del, replace=False).tolist())
+    if mode == "contiguous":
+        k_del = max(1, int(rate / 2 * m))
+        start = int(rng.integers(0, max(1, m - k_del)))
+        del_idx = set(range(start, start + k_del))
+    else:
+        k_del = int(rate * m)
+        del_idx = set(rng.choice(m, size=k_del, replace=False).tolist())
     kept = [i for i in range(m) if i not in del_idx]
     deleted_ids = {str(notes["id"][i]) for i in del_idx}
 
-    # insertions: uniform pitch within the piece's range, uniform onset
-    k_ins = int(rate * len(kept))
+    # insertions: random-note passage(s) not in the score
     p_lo, p_hi = int(notes["pitch"].min()), int(notes["pitch"].max()) + 1
     t_lo, t_hi = float(notes["onset"].min()), float(notes["onset"].max())
+    if mode == "contiguous":
+        k_ins = max(1, int(rate / 2 * len(kept)))
+        anchor = float(rng.uniform(t_lo, t_hi * 0.8))
+        ioi = rng.uniform(0.04, 0.25, k_ins)
+        onsets_ins = anchor + np.cumsum(ioi)
+    else:
+        k_ins = int(rate * len(kept))
+        onsets_ins = rng.uniform(t_lo, t_hi, k_ins)
     ins = np.empty(k_ins, dtype=notes.dtype)
-    ins["onset"] = rng.uniform(t_lo, t_hi, k_ins)
+    ins["onset"] = onsets_ins
     ins["duration"] = rng.uniform(0.05, 0.6, k_ins)
     ins["pitch"] = rng.integers(p_lo, p_hi, k_ins)
     ins["velocity"] = rng.integers(30, 100, k_ins)
@@ -80,6 +96,7 @@ def main() -> None:
     ap.add_argument("--aligner", default="")
     ap.add_argument("--ckpt", default="")
     ap.add_argument("--rate", type=float, default=0.2)
+    ap.add_argument("--mode", choices=["contiguous", "uniform"], default="contiguous")
     ap.add_argument("--seed", type=int, default=99)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--out", default="")
@@ -159,7 +176,7 @@ def main() -> None:
         except Exception as err:
             print(f"SKIP {f.name}: {err}", file=sys.stderr)
             continue
-        perf2, truth2 = apply_mismatch(perf, truth, args.rate, args.seed + k)
+        perf2, truth2 = apply_mismatch(perf, truth, args.rate, args.seed + k, args.mode)
         triples = aligner(score, perf2)
         pred = Alignment(
             matches=frozenset((t["score_id"], t["perf_id"]) for t in triples if t["label"] == "match"),
