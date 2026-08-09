@@ -236,3 +236,18 @@ v1c training live (16k syn + 7420 leakage-free selfsup).
 (mixed corpus ~11M tokens/epoch). 24 epochs ≈ 17h on CPU under contention —
 acceptable for overnight; evaluate per-epoch checkpoints and reassess at
 epoch ~4. Machine swap 5.3/6GB used; trainer holds ~0.9GB at 137% CPU.
+
+**~19:30 BREAKTHROUGH — decode was the bottleneck, not the model.**
+Diagnosis on 4x22: cluster-DTW map (cost = 0.5·Jaccard + 0.5·model-conf) has
+25ms median error, but decode used the sparse 33-anchor interp map instead →
+multi-second holes → phase-2 failures. Fix: UNION of DTW path + anchors.
+Results with the val-acc-57% epoch-0 v1c model:
+- 4x22 full (87 files): match F 0.9964 (P .9969 R .9959); ins F .66, del F .83.
+  Published DualDTW: 0.998±0.4. My classical baseline: 0.986 (8-file).
+- 4x22 contiguous 20% mismatch: match F 0.968, pooled F_align 0.952.
+  (Published on their proprietary hard set: DualDTW 88, TGN-small 95 — not
+  same pieces, but the regime is Bar B and we're strong there already.)
+Remaining gaps: insertion F (ornaments/trills — W7 corpus will help), worst
+files Chopin op38 (~0.97). 23 more epochs of model to come + decode tuning.
+NEXT: per-epoch re-eval; dualdtw on MY mismatch protocol tonight (gap);
+Batik + nASAP robust-test evals in gap; insertion-decode improvement.
