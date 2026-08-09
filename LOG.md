@@ -81,3 +81,18 @@ d=192, relative position bias. Heads: bilinear match matrix S·Pᵀ + null col
 (score→perf+null, perf→score+null). Window ≤512 score notes. Decode v0:
 mutual-best + thresholds; structured DP later. Files: src/mlign/{model,dataset}.py,
 scripts/train.py.
+
+**~16:00 Reports 02+03 landed; DESIGN.md v1 written (binding).** Key decisions:
+parangonar-dict repr + substitution/confidence/ornament ext; single-stream
+encoder 1-token/note w/ score features (voice/grace/metric pos — the gap:
+every existing system is (pitch,onset)-only); dustbin nulls + dual-softmax;
+T5 relative bias (no 512 ceiling); two-phase decode (confident monotone map →
+rarest-pitch-first assignment w/ updating map); 3-source corpus (espressivo
+renders + reorder() self-supervision port + nASAP train-split finetune).
+Baselines verified runnable: parangonar 3.1.0 in system python (DualDTW,
+Automatic, TheGlueNote all F=1.0 on demo). Vienna4x22 .npz benchmark local
+(43,450 matches). Nakamura WASM fork is crippled (dead ornament machinery) —
+build upstream for fair baseline. Velocity trap (fitVelocities) avoided:
+samplers stay ≤115. espressivo E1/E2 defects confirmed at HEAD; corpus v1
+after fix (v0 GT still valid). Java RenderMpm --batch = 10x faster render
+path, adapter liftable from mpmify ml/node/augmented_msm.mjs.
