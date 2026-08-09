@@ -35,11 +35,12 @@ const PRESETS = { none: {}, light: presetLight, medium: presetMedium, heavy: pre
 
 function parseArgs(argv) {
   const pos = [];
-  const opt = { robustness: 'medium', jitter: 12 };
+  const opt = { robustness: 'medium', jitter: 12, ornaments: 0 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--robustness') opt.robustness = argv[++i];
     else if (a === '--jitter') opt.jitter = Number(argv[++i]);
+    else if (a === '--ornaments') opt.ornaments = Number(argv[++i]);
     else pos.push(a);
   }
   if (pos.length !== 3) {
@@ -51,24 +52,91 @@ function parseArgs(argv) {
 const WANT = { dynamics: true, articulation: true, rubato: true, asynchrony: true, movement: true, accentuation: false };
 const OPT = { twoPartProb: 0.5, asynchronyProb: 1.0, movementProb: 0.5 };
 
+// ---------------------------------------------------------------------------
+// Ornament sampling (MPM v3, meico-ts 05147ed). Injected into the built MPM
+// text: a styleDef trio (trill/mordent/turn) in global/header +
+// an ornamentationMap in global/dated. Pool-note figures per the v3 fixture
+// syntax (note.order referencing pool notes + the principal by noteid).
+// ---------------------------------------------------------------------------
+
+const ORN_HEADER =
+  '<ornamentationStyles><styleDef name="mlignOrns">' +
+  '<ornamentDef name="trill" alignment="at start">' +
+  '<temporalSpread frame.offset="0.0ticks" frameLength="100%" noteoff.shift="monophonic" /></ornamentDef>' +
+  '<ornamentDef name="mordent" alignment="at start">' +
+  '<temporalSpread frame.offset="0.0ticks" frameLength="30%" noteoff.shift="monophonic" /></ornamentDef>' +
+  '<ornamentDef name="turn" alignment="at end">' +
+  '<temporalSpread frame.offset="0.0ticks" frameLength="50%" noteoff.shift="monophonic" /></ornamentDef>' +
+  '</styleDef></ornamentationStyles>';
+
+/**
+ * Sample ornaments for a piece: candidates = part-1 notes with duration ≥ one
+ * quarter, spaced ≥ one quarter apart; each gets trill/mordent/turn.
+ * rateP = probability per candidate. Returns the ornamentationMap XML or ''.
+ */
+export function sampleOrnaments(piece, rng, rateP) {
+  const part = piece.parts[0];
+  const entries = [];
+  let lastDate = -1e9;
+  part.notes.forEach((n, i) => {
+    if (n.dur < 720 || n.date - lastDate < 720) return;
+    if (rng.nextDouble() >= rateP) return;
+    lastDate = n.date;
+    const id = `p${part.number}n${i}`;
+    const kind = ['trill', 'mordent', 'turn'][rng.nextInt(3)];
+    const upper = 1 + rng.nextInt(2); // chromatic 1..2 ≈ diatonic neighbor
+    let poolNotes;
+    let order;
+    if (kind === 'trill') {
+      const reps = 2 + rng.nextInt(3); // 2..4 alternation pairs
+      poolNotes = `<note xml:id="u" interval.chromatic="${upper}.0" />`;
+      order = Array.from({ length: reps }, () => '#u ' + `#${id}`).join(' ');
+    } else if (kind === 'mordent') {
+      poolNotes = `<note xml:id="u" interval.chromatic="${upper}.0" />`;
+      order = `#${id} #u #${id}`;
+    } else {
+      poolNotes =
+        `<note xml:id="u" interval.chromatic="${upper}.0" />` +
+        `<note xml:id="l" interval.chromatic="-${upper}.0" />`;
+      order = `#u #${id} #l #${id}`;
+    }
+    entries.push(
+      `<ornament date="${n.date.toFixed(1)}" name.ref="${kind}" noteid="#${id}"` +
+        ` note.order="${order}" xml:id="mlorn${i}">${poolNotes}</ornament>`,
+    );
+  });
+  if (entries.length === 0) return '';
+  return `<ornamentationMap><style date="0.0" name.ref="mlignOrns" />${entries.join('')}</ornamentationMap>`;
+}
+
+/** Splice ornament header + map into a buildMpm document. */
+export function injectOrnaments(mpmXml, ornMapXml) {
+  if (!ornMapXml) return mpmXml;
+  return mpmXml
+    .replace('<global><header />', `<global><header>${ORN_HEADER}</header>`)
+    .replace('<dated><tempoMap>', `<dated>${ornMapXml}<tempoMap>`);
+}
+
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
 /**
- * Ornament pre-pass over the facade's PerformanceData (meico-ts W7 fields;
- * on pre-W7 dists every field is undefined → identity).
+ * Ornament pre-pass over the facade's PerformanceData (meico-ts ornamentation
+ * merge, 05147ed; on older dists the fields are undefined → identity).
  *
- * Generated notes (ornamentSlot !== null per the W7 contract — carved heads
- * carry only ornamented+ornamentRef) get id=null + an ornament origin, so the
- * robustness layer and editsToAlignment treat them as provenanced insertions;
- * their random meico_<uuid> ids must never be mistaken for score identities.
- * Carved heads keep their score id (a match with altered duration — D10).
+ * A note is GENERATED iff its id is not a known score id (generated notes get
+ * random meico_<uuid> ids; slot membership is NOT sufficient — the principal
+ * itself appears inside the figure with a slot and keeps its score id, and
+ * stays a match per D10). Generated notes get id=null + an ornament origin so
+ * the robustness layer and editsToAlignment treat them as provenanced
+ * insertions. Carved heads keep score ids (match with altered duration).
  */
-export function normalizeOrnaments(data) {
+export function normalizeOrnaments(data, scoreIdSet) {
   let touched = false;
   const parts = data.parts.map((part) => ({
     ...part,
     notes: part.notes.map((n) => {
-      if (n.ornamentSlot === null || n.ornamentSlot === undefined) return n;
+      if (n.id !== null && scoreIdSet.has(n.id)) return n;
+      if (!n.ornamented && n.id !== null) return n; // unknown non-ornament id: leave as-is
       touched = true;
       return {
         ...n,
@@ -77,7 +145,7 @@ export function normalizeOrnaments(data) {
           type: 'ornament',
           anchor: n.ornamentAnchor ?? null,
           ref: n.ornamentRef ?? null,
-          slot: n.ornamentSlot,
+          slot: n.ornamentSlot ?? -1,
           pass: n.ornamentPass ?? 0,
         },
       };
@@ -87,10 +155,15 @@ export function normalizeOrnaments(data) {
 }
 
 /** One corpus row, or null when an invariant fails. */
-export function buildSample(piece, robustnessCfg, seedStr) {
-  const { msm, mpm } = documentsFor(piece);
+export function buildSample(piece, robustnessCfg, seedStr, ornMapXml = '') {
+  const { msm, mpm: mpmBase } = documentsFor(piece);
+  const mpm = injectOrnaments(mpmBase, ornMapXml);
   const rendered = captureConsole(() => performMsmToData({ msm, mpm })).value;
-  const clean = normalizeOrnaments(rendered);
+  const scoreIdSet = new Set();
+  for (const part of piece.parts) {
+    for (let i = 0; i < part.notes.length; i++) scoreIdSet.add(`p${part.number}n${i}`);
+  }
+  const clean = normalizeOrnaments(rendered, scoreIdSet);
 
   const { data, edits } = applyRobustness(clean, robustnessCfg, seedStr);
   const { alignment, perfNotes, unattributed } = editsToAlignment(data, edits);
@@ -169,9 +242,10 @@ function main() {
   for (let i = 0; i < args.n; i++) {
     const rng = new JavaRandom(args.seed * 1000003n + BigInt(i));
     const piece = samplePieceV4(rng, i, WANT, OPT);
+    const ornMap = args.ornaments > 0 ? sampleOrnaments(piece, rng, args.ornaments) : '';
     let row;
     try {
-      row = buildSample(piece, cfg, `${args.seed}:${i}`);
+      row = buildSample(piece, cfg, `${args.seed}:${i}`, ornMap);
     } catch (err) {
       process.stderr.write(`piece ${i} render failed: ${err.message}\n`);
       row = null;
