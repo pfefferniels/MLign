@@ -186,21 +186,66 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
         def s2p_time(x):
             return np.zeros_like(np.asarray(x, dtype=float))
 
-    # --- phase 2: per-pitch assignment, rarest pitch first
+    # --- phase 2: per-pitch assignment, rarest pitch first; then rebuild the
+    # map from the matches and re-assign. Round 1's map comes from cluster DTW
+    # (median ~25ms but locally skewed under heavy rubato → off-by-one shifts
+    # inside repeated-pitch runs); round 2's map interpolates the dense round-1
+    # matches, which pins those runs.
     matched_s = np.full(n, -1, dtype=int)
     matched_p = np.full(m, -1, dtype=int)
-    pitches, counts = np.unique(s_pitch, return_counts=True)
-    for pitch in pitches[np.argsort(counts)]:
-        si = np.flatnonzero((s_pitch == pitch) & (matched_s == -1))
-        pj = np.flatnonzero((p_pitch == pitch) & (matched_p == -1))
-        if len(si) == 0 or len(pj) == 0:
-            continue
-        exp = s2p_time(s_onset[si])
-        # small DP: monotone assignment minimizing |perf_time - expected|
-        pairs = _assign_monotone(exp, p_onset[pj], tol_sec, conf[np.ix_(si, pj)])
-        for a_i, b_j in pairs:
-            matched_s[si[a_i]] = pj[b_j]
-            matched_p[pj[b_j]] = si[a_i]
+    for _round in range(2):
+        matched_s.fill(-1)
+        matched_p.fill(-1)
+        pitches, counts = np.unique(s_pitch, return_counts=True)
+        for pitch in pitches[np.argsort(counts)]:
+            si = np.flatnonzero((s_pitch == pitch) & (matched_s == -1))
+            pj = np.flatnonzero((p_pitch == pitch) & (matched_p == -1))
+            if len(si) == 0 or len(pj) == 0:
+                continue
+            exp = s2p_time(s_onset[si])
+            # small DP: monotone assignment minimizing |perf_time - expected|
+            pairs = _assign_monotone(exp, p_onset[pj], tol_sec, conf[np.ix_(si, pj)])
+            for a_i, b_j in pairs:
+                matched_s[si[a_i]] = pj[b_j]
+                matched_p[pj[b_j]] = si[a_i]
+        if _round == 0:
+            got = np.flatnonzero(matched_s >= 0)
+            if len(got) < 8:
+                break
+            pairs2 = _monotone_subset(
+                [(int(i), int(matched_s[i])) for i in got], s_onset, p_onset
+            )
+            if len(pairs2) < 8:
+                break
+            rx = np.array([s_onset[i] for i, _ in pairs2])
+            ry = np.array([p_onset[j] for _, j in pairs2])
+            rx, keep2 = np.unique(rx, return_index=True)
+            ry = ry[keep2]
+            def s2p_time(x, _rx=rx, _ry=ry):  # noqa: F811
+                return np.interp(x, _rx, _ry)
+
+    # Residual rescue: an unmatched score note + unmatched perf note of the
+    # SAME pitch within a tight map window is almost always a pair the
+    # per-pitch DP dropped on a local order violation — labelling them
+    # insertion+deletion would double-count one mistake. Greedy nearest-first.
+    RESCUE_SEC = 0.35
+    res_s = [i for i in range(n) if matched_s[i] < 0]
+    res_p = [j for j in range(m) if matched_p[j] < 0]
+    by_pitch_p: dict[int, list[int]] = {}
+    for j in res_p:
+        by_pitch_p.setdefault(int(p_pitch[j]), []).append(j)
+    cands = []
+    for i in res_s:
+        exp = float(s2p_time(np.array([s_onset[i]]))[0])
+        for j in by_pitch_p.get(int(s_pitch[i]), ()):
+            d = abs(p_onset[j] - exp)
+            if d <= RESCUE_SEC:
+                cands.append((d, i, j))
+    cands.sort()
+    for d, i, j in cands:
+        if matched_s[i] < 0 and matched_p[j] < 0:
+            matched_s[i] = j
+            matched_p[j] = i
 
     triples: list[dict] = []
     for i in range(n):
