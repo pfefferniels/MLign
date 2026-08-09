@@ -65,3 +65,19 @@ Baseline on 5 Bach fugue perfs: match F≈0.991, ins F≈0.72, del F≈0.74,
 ~5.6 s/perf. This is the floor; full-1063 run deferred (≈1.7 h).
 1063 GT performances indexed. nASAP GT semantics: tsv rows are perf-notes
 (xml_id="insertion" spurious; midi_id="deletion" silent score note).
+
+**~15:00 Corpus v0 generating** (background: 4 shards × 4000 pieces,
+robustness none/light/medium/heavy, jitter 12ms, ~3.6KB/piece). Generator =
+mpmify samplers (imported read-only from ml/node/) + espressivo facade +
+robustness layer. 10-piece smoke: invariants OK. Full baseline eval also
+running. NOTE: pieces are short (16-64 beats, ~40-120 notes) — fine for v0;
+longer pieces / real scores (PDMX→MEI) later.
+
+**Model v0 design (pre-report, to refine):** single transformer over
+[SCORE] score-notes [PERF] perf-notes with segment embeddings; per-token
+features (pitch embed + MLP on onset-delta/dur/velocity log-features); L=4,
+d=192, relative position bias. Heads: bilinear match matrix S·Pᵀ + null col
+(score-side deletion) + null row (perf-side insertion); loss = symmetric CE
+(score→perf+null, perf→score+null). Window ≤512 score notes. Decode v0:
+mutual-best + thresholds; structured DP later. Files: src/mlign/{model,dataset}.py,
+scripts/train.py.
