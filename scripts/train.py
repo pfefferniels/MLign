@@ -34,9 +34,16 @@ def main() -> None:
     ap.add_argument("--run", default="runs/v0")
     ap.add_argument("--d-model", type=int, default=192)
     ap.add_argument("--n-layers", type=int, default=4)
+    ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu"])
+    ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
 
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    if args.device == "auto":
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+    else:
+        device = args.device
+    if device == "cpu":
+        torch.set_num_threads(args.threads)
     run_dir = Path(args.run)
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "log.jsonl"
@@ -100,6 +107,8 @@ def main() -> None:
             sched.step()
             tot += loss.item()
             count += 1
+            if device == "mps" and count % 50 == 0:
+                torch.mps.empty_cache()
         val_loss, val_acc = run_val()
         rec = {
             "epoch": epoch,

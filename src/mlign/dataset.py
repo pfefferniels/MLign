@@ -165,18 +165,26 @@ class CorpusBatcher:
         self.rng = np.random.default_rng(seed)
 
     def __iter__(self):
-        order = self.rng.permutation(len(self.rows))
+        # Size-bucketed batching: neighbors in size share a batch, so padded
+        # shapes are near-uniform. Matters twice — less pad waste, and the MPS
+        # cached allocator reuses buffers instead of ballooning (observed 5+ GB
+        # of graphics memory with fully random shapes on an 8 GB machine).
+        # Randomness: jittered size order per epoch + shuffled batch order.
+        order = np.argsort(np.asarray(self.sizes) + self.rng.integers(0, 16, len(self.sizes)))
+        batches: list[list[int]] = []
         batch: list[int] = []
         tokens = 0
         for i in order:
             t = self.sizes[i]
             if batch and tokens + t > self.max_tokens:
-                yield [featurize(parse_row(self.rows[j])) for j in batch]
+                batches.append(batch)
                 batch, tokens = [], 0
-            batch.append(i)
+            batch.append(int(i))
             tokens += t
         if batch:
-            yield [featurize(parse_row(self.rows[j])) for j in batch]
+            batches.append(batch)
+        for k in self.rng.permutation(len(batches)):
+            yield [featurize(parse_row(self.rows[j])) for j in batches[k]]
 
     def __len__(self):
         return max(1, math.ceil(sum(self.sizes) / self.max_tokens))
