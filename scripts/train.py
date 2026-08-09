@@ -49,7 +49,8 @@ def main() -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "log.jsonl"
 
-    rows = load_corpus(sorted(glob.glob(args.corpus)))
+    paths = sorted({p for g in args.corpus.split(",") for p in glob.glob(g.strip())})
+    rows = load_corpus(paths)
     rng = torch.Generator().manual_seed(0)
     perm = torch.randperm(len(rows), generator=rng).tolist()
     n_val = max(1, int(len(rows) * args.val_frac))
