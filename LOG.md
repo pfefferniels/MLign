@@ -270,3 +270,11 @@ unfolding via pass-suffix structure; exact roundtrip) + candidate enumeration
 + mlign/repeats.py ranking. Caveat for the writeup: 4x22 has only 2 repeat
 pieces; nASAP repeat subset (110 perfs) is the bigger test (later).
 Also epoch 1 (val_acc .626): clean 4x22 0.9965 flat, mismatch 0.971.
+
+**Ablation table (same protocols, my runs):**
+| bench | classical bl | model e1 + decode |
+| 4x22 clean (87) | ~0.986 | 0.9965 |
+| 4x22 mismatch contig-20% (88) | 0.9654 / pooled 0.9367 | 0.9711 / 0.9571 |
+| 4x22 folded Bar-C (44) | 0.9803 / pooled 0.9525 | 0.9960 / 0.9922 |
+Structure inference 100% for both → unfolding-as-preprocessing thesis
+validated; model's edge = ins/del handling (pooled gap) + hard files.
