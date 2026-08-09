@@ -23,7 +23,7 @@ if [ "$total" -ge 15900 ] && ! pgrep -f "generate.mjs" > /dev/null; then
     log "starting v1 training (corpus rows: $total)"
     mkdir -p runs
     nohup nice -n 10 .venv/bin/python -W ignore scripts/train.py \
-      --corpus 'data/corpus/v1-*.jsonl' --epochs 30 --device cpu --threads 4 \
-      --matchability --run runs/v1 > runs/v1.out 2>&1 &
+      --corpus 'data/corpus/v1-*.jsonl,data/corpus/selfsup-v1.jsonl' --epochs 24 --device cpu --threads 4 \
+      --matchability --run runs/v1b > runs/v1b.out 2>&1 &
   fi
 fi
