@@ -278,3 +278,30 @@ Also epoch 1 (val_acc .626): clean 4x22 0.9965 flat, mismatch 0.971.
 | 4x22 folded Bar-C (44) | 0.9803 / pooled 0.9525 | 0.9960 / 0.9922 |
 Structure inference 100% for both → unfolding-as-preprocessing thesis
 validated; model's edge = ins/del handling (pooled gap) + hard files.
+
+**~22:25 Epoch 2 (val_acc .676): clean 0.99678 / mismatch 0.9751 / folded
+0.9958 (pooled .9916, structure 44/44).** Monotone improvement per epoch.
+
+**STATE SNAPSHOT (full, for context recovery):**
+- Training: runs/v1c (24 epochs, ~75min each, CPU nice, autopilot-supervised;
+  scripts/autopilot.sh idempotent — run it first on every wakeup). Corpus:
+  data/corpus/v1-{none,light,medium,heavy}.jsonl (16k synthetic, fixed
+  espressivo) + selfsup-v2.jsonl (7420, real nASAP train windows, MAESTRO-test
+  excluded). Eval per epoch: eval/run_4x22{,_mismatch,_repeats}.py --ckpt
+  runs/v1c/best.pt (all npz/match-light, safe alongside training).
+- HEAVY evals (parangonar dualdtw/gluenote/automatic; partitura-based) wait
+  for mpmify gap: check pgrep -f caffeinate (gone = gap). Commands in wakeup
+  prompt + eval/run_eval.py --robust-only --split test.
+- Peers: mpmify-32 (uds:/tmp/cc-socks/16120.sock) pings TRAINING_COMPLETE
+  then ~1-2h gap, then their v4 training (days); meico-ts-09 (12091) pings at
+  ornamentation merge → regenerate corpus w/ ornaments (wiring ready,
+  normalizeOrnaments in generator; task #7); exaggeration agent (77472) pings
+  at usable commit → add exaggeration axis to generator.
+- Numbers so far: see ablation table above + eval/results/*.json. Bars:
+  A 0.9968 (DualDTW published .998), B 0.9751 (public protocol; must run
+  dualdtw on same), C 0.9916 pooled (field ≤36; RUMAA audio 98.4).
+- Next levers: (i) more epochs; (ii) insertion-F (0.74) — mostly repeated
+  -chord false ins + GT trill insertions (4x22 has 184; W7 ornament corpus
+  will teach these); (iii) dualdtw comparison runs in gap; (iv) Batik + nASAP
+  robust-test model runs in gap; (v) nASAP repeat subset (110 perfs) for
+  Bar C at scale; (vi) exaggeration + ornament corpus integration on pings.
