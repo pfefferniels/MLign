@@ -42,7 +42,30 @@ def get_aligner(name: str):
         return lambda entry, score, perf: align_baseline(score, perf)
     if name in ("dualdtw", "automatic", "gluenote"):
         return make_parangonar_aligner(name)
+    if name.startswith("model:"):
+        return make_model_aligner(name.split(":", 1)[1])
     raise SystemExit(f"unknown aligner: {name}")
+
+
+def make_model_aligner(ckpt_path: str):
+    import torch
+
+    from mlign.infer import align_with_model
+    from mlign.model import ModelConfig, NoteAligner
+
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    cfg = ckpt.get("config", {})
+    model = NoteAligner(ModelConfig(
+        d_model=cfg.get("d_model", 192), n_layers=cfg.get("n_layers", 4)
+    )).to(device)
+    model.load_state_dict(ckpt["model"])
+    model.eval()
+
+    def align(entry, score, perf):
+        return align_with_model(model, score, perf, device)
+
+    return align
 
 
 def make_parangonar_aligner(name: str):
