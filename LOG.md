@@ -259,3 +259,14 @@ identical repeated accompaniment chords under extreme rubato (op38 siciliano
 figure) lock in one-off — the literature's classic hard case. Expect model
 confidence to resolve it with more epochs (context can phase-lock runs);
 revisit decode only if it doesn't. Epoch 1 lands ~20:48.
+
+**~21:15 BAR C CONQUERED (v0 of it).** Folded-score 4x22 (K331+D783, 44 perfs),
+symbolic-only, epoch-1 model: structure inference 44/44 correct (pitch-set SW
+gain + note-count prior — self-similar repeats need the count evidence),
+match F 0.996, pooled F_align 0.992. Published on this condition: GlueNote
+12.7, Nakamura 36.4 (pooled); RUMAA (audio, 1-min cap) 98.4. We're at 99.2
+pooled from symbols alone, full pieces. Machinery: eval/folding.py (fold GT
+unfolding via pass-suffix structure; exact roundtrip) + candidate enumeration
++ mlign/repeats.py ranking. Caveat for the writeup: 4x22 has only 2 repeat
+pieces; nASAP repeat subset (110 perfs) is the bigger test (later).
+Also epoch 1 (val_acc .626): clean 4x22 0.9965 flat, mismatch 0.971.
