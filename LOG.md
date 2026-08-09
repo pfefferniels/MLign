@@ -146,3 +146,14 @@ deferred until a machine gap (coordinating schedule with mpmify-32). CLI
 shipped meanwhile: mlign align MEI/MusicXML+MIDI → json/match/jsonl, E2E green
 on espressivo-rendered fixture (MEI bridge = node subprocess regex over MSM;
 score xml:ids preserved). selfsup-v1 (10 windows/file) generating.
+
+**~16:00 Batik harness fixed** (score must come from match file's snote lines
+— GT id space is the PERFORMED unfolding; partitura create_score rejects some
+files, so snote parser in nasap.py). Baseline: kv279_1 0.965 / kv279_3 0.978 /
+kv279_2 **0.262** (ornament-heavy slow movement — the exact problem class MLign
+targets). RULE LEARNED: no partitura evals while my training runs — they
+swap-kill it (8GB shared with mpmify's 1.5GB training). 4x22 npz evals are
+fine (1s, no partitura). Machine schedule agreed with mpmify-32: I hold ~2GB
+niced; heavy bursts in their v31→v4 gap tonight (~21:00-24:00); they ping at
+TRAINING_COMPLETE. MPS warning from them: nn.Transformer hangs on torch 2.11
+MPS — my custom SDPA blocks unaffected (verified by smoke).
