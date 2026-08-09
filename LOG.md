@@ -110,3 +110,18 @@ w/ trill-length bugfix; piece-level split by md5(piece_dir)%10: <8 train,
 NEXT after training: inference+decode pipeline (windowed, two-phase decode per
 DESIGN §4) → eval on nASAP vs dualdtw number → iterate (features, +selfsup
 data, substitution head; ornament data after meico-ts W7 ping).
+
+**~17:10 Interruption + relaunch.** A login/session event killed all background
+jobs (training, both evals); selfsup corpus survived (3368 rows,
+selfsup-v0.jsonl). Relaunched: training runs/v0-syn (resumable), dualdtw full
+eval, lit-research2 agent (first one died on auth). espressivo-study report
+key additions (research/03): facade does NOT expand repeats — class API
+resolveSequencingMaps() needed; duplicated note ids = meico_repetition_<n>_<baseId>
+(regex-recoverable pass number = free repeat GT!); ties collapse to first id;
+grace chords DROPPED by converter; imprecision timing nondeterministic even
+seeded+monophonic (pendingDurations unseeded shake) — recipe unaffected;
+mpmify currently DROPS note.id from its JSONL (their provenance promise is
+proven but unemitted). Ornament v3 branch (meico-ts-orn) confirmed to generate
+notes w/ provenance but ornament.anchor NOT YET IMPLEMENTED there — matches
+meico-ts-09's claim it lands in W5-W7. My monitor on runs/v0-syn/log.jsonl
+is armed.
