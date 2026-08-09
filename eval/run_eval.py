@@ -115,10 +115,12 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--dataset", default=str(ROOT / "data/benchmarks/asap-dataset"))
     ap.add_argument("--out", default="")
+    ap.add_argument("--robust-only", action="store_true",
+                    help="only the ~78%% of alignments flagged robust (TISMIR rec.)")
     args = ap.parse_args()
 
     aligner = get_aligner(args.aligner)
-    idx = NasapIndex.build(args.dataset)
+    idx = NasapIndex.build(args.dataset, robust_only=args.robust_only)
     entries = idx.entries[: args.limit] if args.limit else idx.entries
 
     scores: list[AlignmentScore] = []

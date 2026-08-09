@@ -149,14 +149,25 @@ class NasapIndex:
     entries: list[dict] = field(default_factory=list)
 
     @classmethod
-    def build(cls, root: str | Path) -> "NasapIndex":
+    def build(cls, root: str | Path, robust_only: bool = False) -> "NasapIndex":
         root = Path(root)
+        robust: set[str] | None = None
+        if robust_only:
+            import csv
+
+            robust = set()
+            with open(root / "metadata.csv", newline="", encoding="utf-8") as fh:
+                for row in csv.DictReader(fh):
+                    if row.get("robust_note_alignment", "").strip().lower() in ("true", "1", "yes"):
+                        robust.add(row["midi_performance"])
         entries = []
         for match in sorted(root.rglob("*.match")):
             perf = match.with_suffix("")  # …/Shi05M
             midi = perf.with_suffix(".mid")
             tsv = perf.parent / f"{perf.name}_note_alignments" / "note_alignment.tsv"
             score = perf.parent / "xml_score.musicxml"
+            if robust is not None and str(midi.relative_to(root)) not in robust:
+                continue
             if midi.exists() and score.exists():
                 entries.append(
                     {

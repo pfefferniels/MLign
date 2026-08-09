@@ -55,6 +55,22 @@ class AlignmentScore:
         )
 
 
+def pooled_prf(truth: Alignment, pred: Alignment) -> tuple[float, float, float]:
+    """TISMIR's pooled counting (their Table 1): every predicted label is one
+    prediction, every GT label one target, TP = exact label agreement."""
+    tp = (
+        len(truth.matches & pred.matches)
+        + len(truth.insertions & pred.insertions)
+        + len(truth.deletions & pred.deletions)
+    )
+    n_pred = len(pred.matches) + len(pred.insertions) + len(pred.deletions)
+    n_true = len(truth.matches) + len(truth.insertions) + len(truth.deletions)
+    p = tp / n_pred if n_pred else 1.0
+    r = tp / n_true if n_true else 1.0
+    f = 2 * p * r / (p + r) if (p + r) else 0.0
+    return p, r, f
+
+
 def macro_average(scores: list[AlignmentScore]) -> dict:
     """Mean-over-performances of each class F (parangonar's headline numbers)."""
 

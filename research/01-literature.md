@@ -31,7 +31,8 @@ Three separate bars, on three separate protocols. They are **not** interchangeab
 1% is substantially dataset-annotation noise rather than model error. Chasing it is a poor
 use of effort and is nearly unmeasurable given that three of the four datasets are
 proprietary. **Bars B and C are where the headroom is.** TheGlueNote scores **12.7** on
-repeat-containing scores where RUMAA holds 98.4 — a in the field. But note the
+repeat-containing scores where RUMAA holds 98.4 — an 86-point gap, and the largest single
+weakness in the published symbolic literature. But note the
 protocol asymmetry that makes this comparison less damning than it looks (§3.1): RUMAA
 takes audio + MusicXML *with repeat symbols* and is *designed* to emit repeat/skip tokens,
 while GlueNote is handed a folded score it has no mechanism to unfold. The honest framing
