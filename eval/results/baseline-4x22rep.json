@@ -1,0 +1,280 @@
+{
+  "aggregate": {
+    "match_f": 0.980260513851347,
+    "match_p": 0.9954976771136669,
+    "match_r": 0.9656175038520193,
+    "insertion_f": 0.373918399666312,
+    "deletion_f": 0.3004879997673491,
+    "n": 44,
+    "pooled_f_align": 0.9525071426070533,
+    "structure_acc": 1.0,
+    "aligner": "baseline",
+    "seconds": 20.7
+  },
+  "rows": [
+    {
+      "file": "Mozart_K331_1st-mov_p01",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9873417721518987
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p02",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9862433862433864
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p03",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9331848552338531
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p04",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9861849096705633
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p05",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9840933191940614
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p06",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9678800856531049
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p07",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9873417721518986
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p08",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9819724284199364
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p09",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9883843717001055
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p10",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9764957264957266
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p11",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9850427350427351
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p12",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.985200845665962
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p13",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9786780383795309
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p14",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9785407725321889
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p15",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9733191035218783
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p16",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9862724392819431
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p17",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9841269841269842
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p18",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9841605068637804
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p19",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9862724392819431
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p20",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9798087141339
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p21",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9785867237687366
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p22",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9841269841269842
+    },
+    {
+      "file": "Schubert_D783_no15_p01",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9822294022617124
+    },
+    {
+      "file": "Schubert_D783_no15_p02",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9829984544049459
+    },
+    {
+      "file": "Schubert_D783_no15_p03",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9767441860465116
+    },
+    {
+      "file": "Schubert_D783_no15_p04",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9700787401574804
+    },
+    {
+      "file": "Schubert_D783_no15_p05",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9735614307931572
+    },
+    {
+      "file": "Schubert_D783_no15_p06",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9779179810725552
+    },
+    {
+      "file": "Schubert_D783_no15_p07",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9890453834115805
+    },
+    {
+      "file": "Schubert_D783_no15_p08",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9799072642967541
+    },
+    {
+      "file": "Schubert_D783_no15_p09",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9876160990712075
+    },
+    {
+      "file": "Schubert_D783_no15_p10",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9814814814814815
+    },
+    {
+      "file": "Schubert_D783_no15_p11",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9777070063694268
+    },
+    {
+      "file": "Schubert_D783_no15_p12",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.984472049689441
+    },
+    {
+      "file": "Schubert_D783_no15_p13",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9797822706065319
+    },
+    {
+      "file": "Schubert_D783_no15_p14",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9761526232114467
+    },
+    {
+      "file": "Schubert_D783_no15_p15",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9799072642967541
+    },
+    {
+      "file": "Schubert_D783_no15_p16",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9735614307931572
+    },
+    {
+      "file": "Schubert_D783_no15_p17",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9750778816199377
+    },
+    {
+      "file": "Schubert_D783_no15_p18",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9890795631825273
+    },
+    {
+      "file": "Schubert_D783_no15_p19",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9876543209876543
+    },
+    {
+      "file": "Schubert_D783_no15_p20",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9892141756548537
+    },
+    {
+      "file": "Schubert_D783_no15_p21",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9743589743589742
+    },
+    {
+      "file": "Schubert_D783_no15_p22",
+      "sections": 2,
+      "structure_correct": true,
+      "match_f": 0.9796557120500782
+    }
+  ]
+}
