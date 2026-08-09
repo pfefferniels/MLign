@@ -90,7 +90,11 @@ def main() -> None:
         ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
         cfg = ckpt.get("config", {})
         model = NoteAligner(
-            ModelConfig(d_model=cfg.get("d_model", 192), n_layers=cfg.get("n_layers", 4))
+            ModelConfig(
+                d_model=cfg.get("d_model", 192),
+                n_layers=cfg.get("n_layers", 4),
+                matchability=cfg.get("matchability", False),
+            )
         ).to(device)
         model.load_state_dict(ckpt["model"])
         model.eval()
