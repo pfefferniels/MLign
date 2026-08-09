@@ -109,3 +109,22 @@ port).
 ## 8. Non-goals (for now)
 
 Audio alignment; online/real-time following; hand separation. Revisit post-v1.
+
+## 9. Revisions after research/01 (2026-08-09 late afternoon)
+
+- **Bar C route**: repeat handling as PREPROCESSING (Peter/Hu/Widmer 2505.05055:
+  Smith-Waterman pitch-set local alignment + score-informed backtracking, ~85%
+  correct with all inspected errors = annotation faults; in parangonar as
+  RepeatIdentifier) feeding the matcher an inferred unfolding — NOT RUMAA-style
+  autoregressive edit tokens. Evidence (ISMIR 2024 "Just Label the Repeats"):
+  unfolding beats jump-aware DP.
+- **nASAP protocol**: robust subset (834) + MAESTRO v2 test split (Matchmaker
+  convention: 43 pieces / 59 perfs) for the headline; report TISMIR match-F
+  mean±SD per performance AND pooled F_align.
+- **Corpus source D (later)**: PianoCoRe-A (157k perfs note-aligned via
+  DualDTW+refinement; TISMIR 2026) — noisy-teacher pretraining only; synthetic
+  stays the clean supervision.
+- **Confidence**: FlexDTW re-estimation agreement (2607.15443, AUROC .97) as a
+  model-agnostic confidence source to combine with head confidence.
+- **Risk watch**: ISMIR 2026 program (Sept/Oct) for surprise competitors; no
+  TheGlueNote successor exists as of today.
