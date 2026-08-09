@@ -31,6 +31,10 @@ class ModelConfig:
     d_ff: int = 512
     dropout: float = 0.1
     max_rel: int = 64  # relative-position bucket clip (per segment)
+    # LightGlue-style per-note matchability (sigmoid unary head) replacing the
+    # dustbin-vector nulls: null logit = logit(1 - σ_i) directly per note.
+    # (research/01 §5.1: "unmatchable" is a property of the note, not a global.)
+    matchability: bool = False
 
 
 class RelPosBias(nn.Module):
@@ -102,6 +106,9 @@ class NoteAligner(nn.Module):
         self.null_s = nn.Parameter(torch.randn(cfg.d_model) * 0.02)  # "deleted"
         self.null_p = nn.Parameter(torch.randn(cfg.d_model) * 0.02)  # "inserted"
         self.scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
+        if cfg.matchability:
+            self.matchability_s = nn.Linear(cfg.d_model, 1)
+            self.matchability_p = nn.Linear(cfg.d_model, 1)
 
     def encode(self, pitch, cont, segment, position, pad):
         x = self.pitch_emb(pitch) + self.segment_emb(segment) + self.cont_proj(cont)
@@ -136,12 +143,20 @@ class NoteAligner(nn.Module):
             s_pad[b, :n] = False
             p_pad[b, :m] = False
 
+        s_enc, p_enc = s, p
         s = self.out_s(s)
         p = self.out_p(p)
         sim = torch.einsum("bnd,bmd->bnm", s, p) * self.scale
 
-        null_col = torch.einsum("bnd,d->bn", s, self.null_p)[:, :, None] * self.scale
-        null_row = torch.einsum("bmd,d->bm", p, self.null_s)[:, :, None] * self.scale
+        if self.cfg.matchability:
+            # null logit = raw unary; the softmax then weighs it against the
+            # pairwise sims — equivalent in effect to LightGlue's factorized
+            # log(1-σ) without needing a separate normalization.
+            null_col = self.matchability_s(s_enc)
+            null_row = self.matchability_p(p_enc)
+        else:
+            null_col = torch.einsum("bnd,d->bn", s, self.null_p)[:, :, None] * self.scale
+            null_row = torch.einsum("bmd,d->bm", p, self.null_s)[:, :, None] * self.scale
 
         logits_s2p = torch.cat([sim, null_col], dim=2)
         logits_s2p = logits_s2p.masked_fill(

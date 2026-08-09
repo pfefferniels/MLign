@@ -34,6 +34,7 @@ def main() -> None:
     ap.add_argument("--run", default="runs/v0")
     ap.add_argument("--d-model", type=int, default=192)
     ap.add_argument("--n-layers", type=int, default=4)
+    ap.add_argument("--matchability", action="store_true")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
@@ -59,7 +60,7 @@ def main() -> None:
     train_b = CorpusBatcher(train_rows, max_tokens=args.max_tokens, seed=1)
     val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2)
 
-    model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers)).to(device)
+    model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers, matchability=args.matchability)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params / 1e6:.2f}M", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
