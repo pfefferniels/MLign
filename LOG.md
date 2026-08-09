@@ -157,3 +157,24 @@ fine (1s, no partitura). Machine schedule agreed with mpmify-32: I hold ~2GB
 niced; heavy bursts in their v31→v4 gap tonight (~21:00-24:00); they ping at
 TRAINING_COMPLETE. MPS warning from them: nn.Transformer hangs on torch 2.11
 MPS — my custom SDPA blocks unaffected (verified by smoke).
+
+**~16:30 Literature report landed (research/01, 852 lines) — strategy sharpened.**
+Three bars: (A) clean alignment SATURATED (DualDTW 99.0±1.0 combined, 4x22
+99.8±0.4, Batik 99.4±0.7; nASAP GT noise ceiling ~99 — only 78% robust);
+(B) hard/mismatched: TheGlueNote 95 on their 5-piece +20%-mismatch set — OUR
+HEADROOM (robustness-trained model); (C) repeat-structure: NO published
+symbolic-only system handles folded scores (TheGlueNote scores 12.7 there;
+RUMAA 98.4 but needs audio + repeat-symbol MusicXML) — OUR HEADROOM
+(synthetic repeats + piecewise decode + espressivo sequencingMaps).
+Targets: A ≥99.0 (table stakes), B ≥97, C ≥98 symbolic-only (would be first).
+Metric protocol pinned: TISMIR match-F per-performance mean±SD + pooled
+F_align (RUMAA comparability); worked-example unit test green; robust subset
+= 834 entries (--robust-only). No official nASAP split → inherit MAESTRO v2
+test split later (Matchmaker convention). ALSO: negative-results section says
+soft-DTW/Sinkhorn attempts have NOT beaten the simple bilinear+CE recipe —
+validates model v0 design.
+
+**Training reality check:** CPU 4-threads ≈ slow (~10-15 min/epoch × 30).
+Plan: let it run; evaluate best.pt at every landed epoch on 4x22-lite (npz,
+cheap); full parangonar evals tonight in mpmify's gap. If epoch time
+intolerable → subset corpus (8k) or fewer epochs; model quality signal first.
