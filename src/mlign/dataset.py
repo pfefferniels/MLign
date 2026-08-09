@@ -21,14 +21,21 @@ import torch
 MARKER_PITCH = 128
 
 
-def load_corpus(paths: list[str | Path]) -> list[dict]:
-    rows = []
+def load_corpus(paths: list[str | Path]) -> list[bytes]:
+    """Rows as RAW JSON lines (bytes). 16k parsed rows cost >1.5 GB in dict
+    overhead — enough to swap-kill an 8 GB machine shared with other training
+    jobs. Parse on demand with `parse_row`."""
+    rows: list[bytes] = []
     for p in paths:
-        with open(p, encoding="utf-8") as fh:
+        with open(p, "rb") as fh:
             for line in fh:
                 if line.strip():
-                    rows.append(json.loads(line))
+                    rows.append(line)
     return rows
+
+
+def parse_row(row: bytes | dict) -> dict:
+    return json.loads(row) if isinstance(row, (bytes, str)) else row
 
 
 def featurize(row: dict) -> dict:
@@ -146,25 +153,30 @@ class CorpusBatcher:
     trade.
     """
 
-    def __init__(self, rows: list[dict], max_tokens: int = 6000, seed: int = 0):
+    def __init__(self, rows: list, max_tokens: int = 6000, seed: int = 0):
         self.rows = rows
-        self.sizes = [2 + len(r["score"]) + len(r["perf"]) for r in rows]
+        # cheap size probe without a full parse: count "[" tokens is fragile;
+        # parse once, keep only the two ints.
+        self.sizes = []
+        for r in rows:
+            d = parse_row(r)
+            self.sizes.append(2 + len(d["score"]) + len(d["perf"]))
         self.max_tokens = max_tokens
         self.rng = np.random.default_rng(seed)
 
     def __iter__(self):
         order = self.rng.permutation(len(self.rows))
-        batch: list[dict] = []
+        batch: list[int] = []
         tokens = 0
         for i in order:
             t = self.sizes[i]
             if batch and tokens + t > self.max_tokens:
-                yield [featurize(self.rows[j]) for j in batch]
+                yield [featurize(parse_row(self.rows[j])) for j in batch]
                 batch, tokens = [], 0
             batch.append(i)
             tokens += t
         if batch:
-            yield [featurize(self.rows[j]) for j in batch]
+            yield [featurize(parse_row(self.rows[j])) for j in batch]
 
     def __len__(self):
         return max(1, math.ceil(sum(self.sizes) / self.max_tokens))
