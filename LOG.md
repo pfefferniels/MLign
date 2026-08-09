@@ -199,3 +199,9 @@ interruptions → generators now run DETACHED (nohup+disown) with durable
 writeSync; scripts/autopilot.sh = idempotent supervisor (restarts missing
 generators; starts v1 training when 4x4000 shards complete). Cron install
 denied by permission classifier — wakeup loop invokes autopilot.sh instead.
+
+**~17:05 v1 training LIVE and learning.** Epoch 0: val_acc 84.1%, 626s/epoch
+(30 epochs → ~22:10 done). Epoch-0 best.pt through full decode on synthetic
+val: match F 0.936 (classical baseline: 0.933), del F 0.56 (bl 0.42), ins F
+0.40 (bl 0.46). Model+decode wiring proven end-to-end; 29 epochs of headroom.
+Bar-B benchmark now has contiguous mode (TheGlueNote OOD protocol).
