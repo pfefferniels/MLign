@@ -47,14 +47,14 @@ def main() -> None:
     n_val = max(1, int(len(rows) * args.val_frac))
     val_rows = [rows[i] for i in perm[:n_val]]
     train_rows = [rows[i] for i in perm[n_val:]]
-    print(f"corpus: {len(train_rows)} train / {len(val_rows)} val pieces; device={device}")
+    print(f"corpus: {len(train_rows)} train / {len(val_rows)} val pieces; device={device}", flush=True)
 
     train_b = CorpusBatcher(train_rows, max_tokens=args.max_tokens, seed=1)
     val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2)
 
     model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"model params: {n_params / 1e6:.2f}M")
+    print(f"model params: {n_params / 1e6:.2f}M", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs * len(train_b))
 
