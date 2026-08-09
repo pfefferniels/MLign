@@ -118,10 +118,18 @@ def main() -> None:
     ap.add_argument("--out", default="")
     ap.add_argument("--robust-only", action="store_true",
                     help="only the ~78%% of alignments flagged robust (TISMIR rec.)")
+    ap.add_argument("--split", choices=["all", "test", "train"], default="all",
+                    help="MAESTRO-v2-derived piece split (eval/split.py)")
     args = ap.parse_args()
 
     aligner = get_aligner(args.aligner)
     idx = NasapIndex.build(args.dataset, robust_only=args.robust_only)
+    if args.split != "all":
+        from split import test_split
+
+        folders, _ = test_split()
+        keep = (lambda p: p in folders) if args.split == "test" else (lambda p: p not in folders)
+        idx.entries = [e for e in idx.entries if keep(e["piece"])]
     entries = idx.entries[: args.limit] if args.limit else idx.entries
 
     scores: list[AlignmentScore] = []
