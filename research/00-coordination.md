@@ -104,3 +104,8 @@ Update: R1-R6 adopted verbatim; + `global` scope (level-spread around geometric
 mean — piecewise-constant maps would otherwise no-op), per-dim center override,
 exact composition s1∘s2 = s1·s2, clamp events surfaced in report (drop
 saturated samples).
+R5 qualification (2026-08-10): R5a (no symbolic writes) universal; R5b (stable
+render geometry) does NOT hold for ornamentSpread/Spacing over tick-frame
+note-generating v3 ornaments; zero-length carved-head cliff at spread s=2.
+My mode = option 2 (generated notes never cross-render anchors; GT from same
+performed MSM). Adopt: spread ∈ [0.6,1.6], drop zero-duration carved heads.
