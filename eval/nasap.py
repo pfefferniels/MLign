@@ -33,6 +33,45 @@ _SNOTE_NOTE = re.compile(r"^snote\(([^,]+),.*?\)-note\(([^,]+),")
 _SNOTE_ONLY = re.compile(r"^snote\(([^,]+),")
 _NOTE_ONLY = re.compile(r"^(?:insertion-)?note\(([^,]+),")
 
+# snote(id,[Step,Alter],Octave,Bar:Beat,Offset,Dur,OnsetBeat,OffsetBeat,[attrs])
+_SNOTE_FULL = re.compile(
+    r"snote\(([^,]+),\[([A-Ga-g]),([^\]]*)\],(-?\d+),[^,]*,[^,]*,[^,]*,(-?[\d.]+),(-?[\d.]+),\[([^\]]*)\]\)"
+)
+_STEP = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+_ALTER = {"n": 0, "": 0, "#": 1, "s": 1, "x": 2, "ss": 2, "b": -1, "f": -1, "bb": -2, "ff": -2}
+
+
+def score_notes_from_match(path: str | Path) -> list[dict]:
+    """Score-side note records straight from the snote lines — the GT's own
+    score, in the GT's own unfolding and id space. Avoids partitura's
+    create_score (which rejects some Batik files). Onsets in beats.
+
+    Voice is parsed from a `v<N>` attr when present, else 0.
+    """
+    records = []
+    for raw in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+        if not raw.startswith("snote("):
+            continue
+        m = _SNOTE_FULL.match(raw.strip())
+        if not m:
+            continue
+        sid, step, alter, octave, on, off, attrs = m.groups()
+        pitch = 12 * (int(octave) + 1) + _STEP[step.upper()] + _ALTER.get(alter.strip(), 0)
+        voice = 0
+        vm = re.search(r"\bv(\d+)\b", attrs)
+        if vm:
+            voice = int(vm.group(1))
+        records.append(
+            {
+                "id": sid,
+                "pitch": int(pitch),
+                "onset": float(on),
+                "duration": max(0.0, float(off) - float(on)),
+                "voice": voice,
+            }
+        )
+    return records
+
 
 def load_match(path: str | Path) -> Alignment:
     """Parse a matchfile into id-pair sets.
