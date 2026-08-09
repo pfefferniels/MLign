@@ -185,3 +185,11 @@ v1 corpus regenerating (same seeds, fixed renderer, espressivo-only — never
 mix renderers per mpmify guidance). v0 demoted to plumbing data. v0-syn
 training continues meanwhile as a wiring/speed probe; will restart on v1 when
 shards land.
+
+**~16:15 Second kill wave** took v1 corpus regen + v0 training. Root cause of
+data loss found: generator's sync loop never yields → createWriteStream held
+ALL rows in memory → kill = empty file. Fixed with writeSync per row.
+Serialized restore: v1 corpus solo first (4 niced shards), training on v1
+(--matchability, mixed with selfsup-v1) after shards land. v0-syn run
+abandoned (never completed an epoch under contention; CPU-thread probe next
+run will measure epoch time solo).
