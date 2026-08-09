@@ -251,3 +251,11 @@ Remaining gaps: insertion F (ornaments/trills — W7 corpus will help), worst
 files Chopin op38 (~0.97). 23 more epochs of model to come + decode tuning.
 NEXT: per-epoch re-eval; dualdtw on MY mismatch protocol tonight (gap);
 Batik + nASAP robust-test evals in gap; insertion-decode improvement.
+
+**~20:15 Decode iteration 2.** Two-round assignment (rebuild map from round-1
+matches → re-assign) + same-pitch residual rescue: 4x22 match F 0.9968,
+ins F 0.73, del F 0.85. Remaining errors concentrated in ONE phenomenon:
+identical repeated accompaniment chords under extreme rubato (op38 siciliano
+figure) lock in one-off — the literature's classic hard case. Expect model
+confidence to resolve it with more epochs (context can phase-lock runs);
+revisit decode only if it doesn't. Epoch 1 lands ~20:48.
