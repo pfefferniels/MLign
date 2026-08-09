@@ -35,11 +35,55 @@ def triples_to_alignment(triples: list[dict]) -> Alignment:
 
 
 def get_aligner(name: str):
+    """Returns f(entry, score, perf) → triples."""
     if name == "baseline":
         from mlign.baseline import align_baseline
 
-        return align_baseline
+        return lambda entry, score, perf: align_baseline(score, perf)
+    if name in ("dualdtw", "automatic", "gluenote"):
+        return make_parangonar_aligner(name)
     raise SystemExit(f"unknown aligner: {name}")
+
+
+def make_parangonar_aligner(name: str):
+    """parangonar baselines, fed exactly like MLign (same unfolding, same ids)."""
+    import contextlib
+    import io
+    import warnings
+
+    import parangonar as pa
+    import partitura
+
+    matcher = {
+        "dualdtw": pa.DualDTWNoteMatcher,
+        "automatic": pa.AutomaticNoteMatcher,
+        "gluenote": pa.TheGlueNoteMatcher,
+    }[name]()
+
+    def align(entry, score, perf):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            s = partitura.load_score(str(entry["score"]))
+            part = partitura.score.merge_parts(s.parts)
+            unfolded = partitura.score.unfold_part_maximal(part)
+            sna = unfolded.note_array(include_grace_notes=True)
+            pna = partitura.load_performance_midi(str(entry["midi"])).note_array()
+            kwargs = {}
+            if name == "dualdtw":
+                kwargs = {"process_ornaments": False, "score_part": unfolded}
+            with contextlib.redirect_stdout(io.StringIO()):
+                pred = matcher(sna, pna, **kwargs)
+        out = []
+        for d in pred:
+            if d["label"] == "match":
+                out.append({"label": "match", "score_id": d["score_id"], "perf_id": d["performance_id"]})
+            elif d["label"] == "deletion":
+                out.append({"label": "deletion", "score_id": d["score_id"]})
+            elif d["label"] in ("insertion", "ornament"):
+                out.append({"label": "insertion", "perf_id": d["performance_id"]})
+        return out
+
+    return align
 
 
 def main() -> None:
@@ -66,7 +110,7 @@ def main() -> None:
                 score_cache[key] = ScoreTable.from_musicxml(e["score"])
             score = score_cache[key]
             perf = PerfTable.from_midi(e["midi"])
-            pred = triples_to_alignment(aligner(score, perf))
+            pred = triples_to_alignment(aligner(e, score, perf))
             truth = load_match(e["match"])
             s = AlignmentScore.compare(truth, pred)
             scores.append(s)
