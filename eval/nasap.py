@@ -158,7 +158,8 @@ class NasapIndex:
             robust = set()
             with open(root / "metadata.csv", newline="", encoding="utf-8") as fh:
                 for row in csv.DictReader(fh):
-                    if row.get("robust_note_alignment", "").strip().lower() in ("true", "1", "yes"):
+                    flag = row.get("robust_note_alignment", "").strip().lower()
+                    if flag in ("true", "yes") or (flag and flag not in ("false", "no") and float(flag) > 0):
                         robust.add(row["midi_performance"])
         entries = []
         for match in sorted(root.rglob("*.match")):
