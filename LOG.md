@@ -178,3 +178,10 @@ validates model v0 design.
 Plan: let it run; evaluate best.pt at every landed epoch on 4x22-lite (npz,
 cheap); full parangonar evals tonight in mpmify's gap. If epoch time
 intolerable → subset corpus (8k) or fewer epochs; model quality signal first.
+
+**~16:05 espressivo E1/E2 FIXED** (meico-ts main da24612, fix c77f4aa, dist
+rebuilt 15:56; 2365 tests green, cross-renderer 3169→37 diffs all ≤3.64e-12ms).
+v1 corpus regenerating (same seeds, fixed renderer, espressivo-only — never
+mix renderers per mpmify guidance). v0 demoted to plumbing data. v0-syn
+training continues meanwhile as a wiring/speed probe; will restart on v1 when
+shards land.
