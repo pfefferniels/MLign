@@ -125,3 +125,15 @@ proven but unemitted). Ornament v3 branch (meico-ts-orn) confirmed to generate
 notes w/ provenance but ornament.anchor NOT YET IMPLEMENTED there — matches
 meico-ts-09's claim it lands in W5-W7. My monitor on runs/v0-syn/log.jsonl
 is armed.
+
+**User pause (~3:10):** all background work to be restored at 3:20. Restore
+checklist: (1) training: nohup .venv/bin/python -W ignore scripts/train.py
+--corpus 'data/corpus/v0-*.jsonl' --epochs 30 --run runs/v0-syn (resumes from
+last.pt automatically); (2) eval: .venv/bin/python -W ignore eval/run_eval.py
+--aligner dualdtw --out eval/results/dualdtw-full.json; also --aligner baseline
+--out eval/results/baseline-full.json; (3) subagent lit-research2 (report →
+research/01-literature.md; respawn with same focused prompt if dead — exact
+prompt in transcript ~17:10 relaunch); (4) monitor on runs/v0-syn/log.jsonl;
+(5) after training: eval model via src/mlign/infer.py align_with_model on
+nASAP, compare vs dualdtw number. Peers owe us pings: meico-ts-09 (W7 facade
++ merge), mpmify-32 (fixed espressivo dist after E1/E2; factored samplers).
