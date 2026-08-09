@@ -325,3 +325,10 @@ teaches). Stopped v1c; v2 = warm-start from e3 weights on v1(16k) +
 v2orn(8k, --ornaments 0.5) + selfsup-v2(7.4k) ≈ 31.4k rows. Autopilot →
 runs/v2. Epochs est. ~85-95 min under contention. mpmify still training
 (no gap yet — their 21:00-24:00 estimate may slip).
+
+**~00:50 (day 2) Gap locked 03:00-07:00** (mpmify extended it to 4h for my
+suite; v31 ETA ~03:00, their v4 starts ~07:00). scripts/gap-run.sh armed
+detached: waits for caffeinate exit → dualdtw/model/gluenote on nASAP
+robust-test + dualdtw on my mismatch protocol + both on Batik; hard 07:00
+cutoff; log eval/results/gap-run.log. v2 training runs through (warm-started,
+29.8k rows, e4 lands ~01:10).
