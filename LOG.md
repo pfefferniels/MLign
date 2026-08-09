@@ -54,3 +54,14 @@ insertions negative). Test invocation pinned: node --test 'src/robustness/test/*
 **Datasets landed** (data/benchmarks/, gitignored): asap-dataset 1.9G sparse
 (no audio), batik_plays_mozart 120M, vienna4x22 23M (match/ dir present).
 Disk after: ~10G free — corpus budget must stay small; stream + gzip.
+
+**~14:15 Full eval loop closed.** eval/: nasap.py (match+tsv GT loaders,
+cross-validated 25/25), metrics.py (parangonar-compatible per-class P/R/F,
+macro-avg), run_eval.py (runner). src/mlign/: tables.py (ScoreTable via
+partitura merge+unfold_maximal — reproduces nASAP "-1" id space exactly;
+PerfTable via load_performance_midi — reproduces n0.. perf ids, verified),
+baseline.py (onset-cluster DTW + Jaccard + within-cluster pitch pairing).
+Baseline on 5 Bach fugue perfs: match F≈0.991, ins F≈0.72, del F≈0.74,
+~5.6 s/perf. This is the floor; full-1063 run deferred (≈1.7 h).
+1063 GT performances indexed. nASAP GT semantics: tsv rows are perf-notes
+(xml_id="insertion" spurious; midi_id="deletion" silent score note).
