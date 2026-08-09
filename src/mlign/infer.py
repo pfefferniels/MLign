@@ -194,12 +194,20 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
     triples: list[dict] = []
     for i in range(n):
         if matched_s[i] >= 0:
-            triples.append({"label": "match", "score_idx": i, "perf_idx": int(matched_s[i])})
+            j = int(matched_s[i])
+            triples.append({
+                "label": "match", "score_idx": i, "perf_idx": j,
+                "confidence": float(conf[i, j]),
+            })
         else:
-            triples.append({"label": "deletion", "score_idx": i})
+            # confidence that the note is truly deleted = null share of the
+            # score note's softmax mass
+            null_share = float(_softmax(np.concatenate([sim[i], [null_s[i]]]), axis=0)[-1])
+            triples.append({"label": "deletion", "score_idx": i, "confidence": null_share})
     for j in range(m):
         if matched_p[j] < 0:
-            triples.append({"label": "insertion", "perf_idx": j})
+            null_share = float(_softmax(np.concatenate([sim[:, j], [null_p[j]]]), axis=0)[-1])
+            triples.append({"label": "insertion", "perf_idx": j, "confidence": null_share})
     return triples
 
 
@@ -277,14 +285,24 @@ def align_with_model(model, score: ScoreTable, perf: PerfTable, device: str = "c
     triples = decode(row, sim, null_s, null_p)
     out = []
     for t in triples:
+        conf = t.get("confidence")
         if t["label"] == "match":
             out.append({
                 "label": "match",
                 "score_id": str(score.notes["id"][t["score_idx"]]),
                 "perf_id": str(perf.notes["id"][t["perf_idx"]]),
+                "confidence": conf,
             })
         elif t["label"] == "deletion":
-            out.append({"label": "deletion", "score_id": str(score.notes["id"][t["score_idx"]])})
+            out.append({
+                "label": "deletion",
+                "score_id": str(score.notes["id"][t["score_idx"]]),
+                "confidence": conf,
+            })
         else:
-            out.append({"label": "insertion", "perf_id": str(perf.notes["id"][t["perf_idx"]])})
+            out.append({
+                "label": "insertion",
+                "perf_id": str(perf.notes["id"][t["perf_idx"]]),
+                "confidence": conf,
+            })
     return out
