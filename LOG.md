@@ -422,3 +422,9 @@ trajectory intact; done ~35 min.** HPC agent's --max-tokens pushback accepted
 (they were right — resume trajectory purity). Scaled-run plan: fresh corpus
 3-5x (local generation), d256-320/L6-8, max-tokens 24-32k, ckpts every 4
 epochs.
+
+**~16:40 Scaled run pipeline.** 5 generators running (v4syn-a..d 8k each:
+ornaments 0.3-0.35, two with exaggeration; selfsup-v3 20-window ~15k).
+Ceiling-probe run agreed: d320/L8, max-tokens 32k, 40 epochs, fresh, ~85k
+rows w/ ≥30% real (server-side hardlink oversampling). HPC agent pipelines
+shard uploads as they land. H100 v3 finishing ~16:35 (e6 val_acc .9251).
