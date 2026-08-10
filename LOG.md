@@ -344,3 +344,7 @@ meico-ts-exag @ 3432d25). --exaggerate flag: log-uniform s over tempo
 with --ornaments; 6-piece smoke green, id-set invariance verified. All three
 peer deliverables now integrated (ornaments, exaggeration, shared samplers).
 Exag-curriculum shards after gap window.
+
+**~10:10 (day 2)** Second sleep (~02:30-09:07) — zero loss: autopilot revived
+v2 trainer, gap-runner re-armed 09:07, mpmify's v31 resumed too. Epoch 5
+cooking; gap suite fires whenever v31 actually exits (relative window).
