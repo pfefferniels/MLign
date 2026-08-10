@@ -366,3 +366,11 @@ v3exag 8k (NEW: exaggeration curriculum) + selfsup ×2 via hardlink (14.8k,
 34% real). 4x22 = dev set (model selection); nASAP robust-test stays untouched
 as headline. Exag shards done (2×4000). All 3 peer campaigns merged upstream
 + integrated.
+
+**~13:37 GAP OPEN — comparison suite running.** v31 done (their rubato F1
+0.50 milestone); 4h window to ~17:35. Suite order: dualdtw → my model
+(v1c-e3, best transfer ckpt) → gluenote on nASAP robust-test (84 perfs,
+untouched holdout), then dualdtw on my mismatch protocol, then Batik both.
+Two runner bugs fixed en route: any-caffeinate blocking (transient -t 300
+inhibitors + mpmify's waiting chain matched the pattern) → anchored
+"^caffeinate -is python3".
