@@ -332,3 +332,8 @@ detached: waits for caffeinate exit → dualdtw/model/gluenote on nASAP
 robust-test + dualdtw on my mismatch protocol + both on Batik; hard 07:00
 cutoff; log eval/results/gap-run.log. v2 training runs through (warm-started,
 29.8k rows, e4 lands ~01:10).
+
+**~01:45 v2-e4** (1st epoch on ornament mix, val_acc .847): clean .9955 /
+mm .9722 / folded .9943 (structure 44/44) / ins-F .679 — small transient dip
+vs v1c-e3 (boundaries migrating to new insertion patterns); judge at e6-e8.
+v31 still running (mpmify ETA ~03:00); gap-runner waiting.
