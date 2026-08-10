@@ -480,3 +480,13 @@ Bach trill pieces +2pts each but still behind (both systems <0.93 there — GT
 noise ceiling territory). ins-F still ours (.9271 vs .9225); del-F the main
 lever (.7901 vs .8237). v4h100 (6.28M params, 93k rows, 96 epochs) in flight
 — every-4-epochs checkpoints land in runs/v4h100/.
+
+**~18:50 v4h100 timing problem + HPC agent unreachable.** Real epochs 403s
+(probe said 105 — packing difference on mixed corpus): 96 epochs ≈ 10.8h vs
+6h limit → job dies ~e52, cosine unfinished (mid-decay LR = undertrained
+final). HPC agent's socket dead + session gone from ListAgents — no scancel/
+resubmit possible. Fallout contained: Mac-side puller still delivers every-4-
+epoch checkpoints; val-selected best.pt usable; v4small submission status
+unknown. Plan: dev-benchmark each arriving checkpoint; when HPC agent or
+Niels returns → resubmit with 13-14h limit resuming from last checkpoint.
+Scaled model at e2 already 0.9960 dev-clean (par with small model's best).
