@@ -1,8 +1,8 @@
 #!/bin/zsh
-# Overnight comparison suite. Waits for mpmify's v31 trainer (caffeinate) to
-# exit, then runs the heavy parangonar/model comparisons sequentially.
-# Self-limiting: aborts any NEW step after the cutoff hour (07:00) so mpmify's
-# v4 training starts on a quiet machine. Detached-safe; log = eval/results/gap-run.log.
+# Overnight comparison suite. Waits for mpmify's trainer (caffeinate) to exit,
+# then runs heavy comparisons sequentially for AT MOST 4 hours after the gap
+# opens (the agreed window length — relative, battery-sleep-proof), then stops
+# starting new steps. Log: eval/results/gap-run.log.
 cd /Users/nielspfeffer/Projects/MLign
 PY=.venv/bin/python
 LOG=eval/results/gap-run.log
@@ -10,13 +10,14 @@ log() { echo "$(date +%H:%M:%S) $*" >> $LOG; }
 
 log "gap-runner armed; waiting for caffeinate to exit"
 while pgrep -f caffeinate > /dev/null; do sleep 120; done
+GAP_OPEN=$(date +%s)
 log "GAP OPEN"
 
 run_step() {
   local name=$1; shift
-  local hour=$(date +%H)
-  if [ "$hour" -ge 7 ] && [ "$hour" -lt 12 ]; then
-    log "SKIP $name (past 07:00 cutoff)"
+  local now=$(date +%s)
+  if [ $(( now - GAP_OPEN )) -gt 14400 ]; then
+    log "SKIP $name (past gap-open+4h)"
     return
   fi
   log "START $name"
