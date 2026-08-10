@@ -456,3 +456,12 @@ silent CORPUS_GLOBS truncation bug in sbatch (comma-split → would have
 trained on 1/5 corpus reporting COMPLETED — the nightmare class). Verification
 habit adopted: staged-file-count line checked every run. Submission waits on
 selfsup-v3 upload (607MB) + selfsup-v4 generation.
+
+**~17:30 (session restored) Corrected tables so far:**
+- Batik (36 movements, fixed harness): MLign 0.9931 ± 0.0053 — at DualDTW's
+  published 0.994±0.7 level; dualdtw local rerun in progress (previous 0.0 was
+  MY adapter re-parsing MusicXML → id mismatch; now table-based).
+- Bar B (4x22 contiguous 20% mismatch, 87 files): DualDTW 0.9757 ± 0.0155 vs
+  MLign 0.9751 (v1c-e3) — statistical tie.
+Re-match (v3-e23 on holdout) relaunched detached after session-limit kill.
+selfsup-v4 done; scaled-run submission waits on uploads.
