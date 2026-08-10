@@ -515,3 +515,13 @@ harness: MLign 0.9931 ± .0053 vs DualDTW 0.9920 ± .0087 (their published:
 0.994±.7). Scoreboard now: Batik WIN, holdout −0.0019, Bar B tie (.9751 vs
 .9757), Bar C ours alone (.992 pooled), TheGlueNote beaten everywhere.
 v4h100 e10 val .976, ~05:00 finish.
+
+**~21:55 v4h100 OVERFITTING SIGNAL at e20:** cluster-val .9852 but dev clean
+DROPPED to .9914 (e5: .9960) and mismatch to .9583 — big model memorizes
+synthetic mix at real-transfer's expense; cluster val (5% of mix) cannot see
+this. Countermeasures: (a) snapshot-per-arrival armed (snap-eN.pt; e5 weights
+sadly overwritten — best dev ckpt so far lost, but e20+ snapshots + late
+cosine phase may recover); (b) checkpoint SELECTION moves to dev benchmarks,
+not cluster val; (c) v4small (morning) may transfer better; (d) for the next
+run: dev-proxy in cluster val (mix real windows into val split explicitly) or
+early-epoch bias. The night decides via snapshots.
