@@ -490,3 +490,8 @@ epoch checkpoints; val-selected best.pt usable; v4small submission status
 unknown. Plan: dev-benchmark each arriving checkpoint; when HPC agent or
 Niels returns → resubmit with 13-14h limit resuming from last checkpoint.
 Scaled model at e2 already 0.9960 dev-clean (par with small model's best).
+
+**~19:20 v4h100 trajectory:** e3 dev .9962/del .864; e5 val_acc .9361, full-87
+clean .9960 (subset numbers flatter — full-87 is the only truth), del .870
+best-yet, ins dipped .63 (transient). Milestone cadence now: full evals at
+~e12/e24/pre-kill; holdout fires when full-87 clean > .9968.

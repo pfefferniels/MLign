@@ -1,158 +1,158 @@
 {
   "aggregate": {
-    "match_f": 0.0,
-    "match_p": 0.0,
-    "match_r": 0.0,
-    "insertion_f": 0.0,
-    "deletion_f": 0.2342732856820099,
+    "match_f": 0.9919796938294978,
+    "match_p": 0.9940399649298232,
+    "match_r": 0.9899522245710846,
+    "insertion_f": 0.8699233584519558,
+    "deletion_f": 0.4692055565549085,
     "n": 36,
     "aligner": "dualdtw",
-    "seconds": 409.0
+    "seconds": 258.3
   },
   "rows": [
     {
       "piece": "kv279_1",
-      "match_f": 0.0
+      "match_f": 0.9967891544773457
     },
     {
       "piece": "kv279_2",
-      "match_f": 0.0
+      "match_f": 0.9867295782954881
     },
     {
       "piece": "kv279_3",
-      "match_f": 0.0
+      "match_f": 0.9984361424847957
     },
     {
       "piece": "kv280_1",
-      "match_f": 0.0
+      "match_f": 0.997186495176849
     },
     {
       "piece": "kv280_2",
-      "match_f": 0.0
+      "match_f": 0.9956063268892794
     },
     {
       "piece": "kv280_3",
-      "match_f": 0.0
+      "match_f": 0.9959016393442623
     },
     {
       "piece": "kv281_1",
-      "match_f": 0.0
+      "match_f": 0.9962221382697393
     },
     {
       "piece": "kv281_2",
-      "match_f": 0.0
+      "match_f": 0.9894875164257555
     },
     {
       "piece": "kv281_3",
-      "match_f": 0.0
+      "match_f": 0.9766598685701338
     },
     {
       "piece": "kv282_1",
-      "match_f": 0.0
+      "match_f": 0.9931362196409714
     },
     {
       "piece": "kv282_2",
-      "match_f": 0.0
+      "match_f": 0.9997128911857593
     },
     {
       "piece": "kv282_3",
-      "match_f": 0.0
+      "match_f": 0.995037868895273
     },
     {
       "piece": "kv283_1",
-      "match_f": 0.0
+      "match_f": 0.9996972449288525
     },
     {
       "piece": "kv283_2",
-      "match_f": 0.0
+      "match_f": 1.0
     },
     {
       "piece": "kv283_3",
-      "match_f": 0.0
+      "match_f": 0.9953775038520802
     },
     {
       "piece": "kv284_1",
-      "match_f": 0.0
+      "match_f": 0.9951338199513382
     },
     {
       "piece": "kv284_2",
-      "match_f": 0.0
+      "match_f": 0.9843489843489842
     },
     {
       "piece": "kv284_3",
-      "match_f": 0.0
+      "match_f": 0.9880195435379158
     },
     {
       "piece": "kv330_1",
-      "match_f": 0.0
+      "match_f": 0.99335232668566
     },
     {
       "piece": "kv330_2",
-      "match_f": 0.0
+      "match_f": 0.9900103341370995
     },
     {
       "piece": "kv330_3",
-      "match_f": 0.0
+      "match_f": 0.9949494949494949
     },
     {
       "piece": "kv331_1",
-      "match_f": 0.0
+      "match_f": 0.9946865037194473
     },
     {
       "piece": "kv331_2",
-      "match_f": 0.0
+      "match_f": 0.9921171171171171
     },
     {
       "piece": "kv331_3",
-      "match_f": 0.0
+      "match_f": 0.9978586723768736
     },
     {
       "piece": "kv332_1",
-      "match_f": 0.0
+      "match_f": 0.9910508083140878
     },
     {
       "piece": "kv332_2",
-      "match_f": 0.0
+      "match_f": 0.9519353466609953
     },
     {
       "piece": "kv332_3",
-      "match_f": 0.0
+      "match_f": 0.9978736710444028
     },
     {
       "piece": "kv333_1",
-      "match_f": 0.0
+      "match_f": 0.9949642194540154
     },
     {
       "piece": "kv333_2",
-      "match_f": 0.0
+      "match_f": 0.9954245043213016
     },
     {
       "piece": "kv333_3",
-      "match_f": 0.0
+      "match_f": 0.9900699983721308
     },
     {
       "piece": "kv457_1",
-      "match_f": 0.0
+      "match_f": 0.9953224189776144
     },
     {
       "piece": "kv457_2",
-      "match_f": 0.0
+      "match_f": 0.9845486581729466
     },
     {
       "piece": "kv457_3",
-      "match_f": 0.0
+      "match_f": 0.9815979501514094
     },
     {
       "piece": "kv533_1",
-      "match_f": 0.0
+      "match_f": 0.9920387677397023
     },
     {
       "piece": "kv533_2",
-      "match_f": 0.0
+      "match_f": 0.9918495297805642
     },
     {
       "piece": "kv533_3",
-      "match_f": 0.0
+      "match_f": 0.9981357196122297
     }
   ]
 }
