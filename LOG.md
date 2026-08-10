@@ -473,3 +473,10 @@ supervision (best.pt is val-selected; socket-death-proof); every-4-epochs
 ckpt pulls → passive local dev-benchmarking. (2) Queued v4small (d192/L4,
 same corpus+schedule) as scale ablation after v4h100. Re-match + dualdtw-batik
 chain running locally.
+
+**~18:00 RE-MATCH: gap halved.** nASAP robust test: DualDTW 0.9852 ± .017 vs
+MLign v3-e23 **0.9833 ± .020** (was .9811). Per-perf 33W/4T/47L (was 17/2/65).
+Bach trill pieces +2pts each but still behind (both systems <0.93 there — GT
+noise ceiling territory). ins-F still ours (.9271 vs .9225); del-F the main
+lever (.7901 vs .8237). v4h100 (6.28M params, 93k rows, 96 epochs) in flight
+— every-4-epochs checkpoints land in runs/v4h100/.
