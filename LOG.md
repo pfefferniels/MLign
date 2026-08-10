@@ -392,3 +392,12 @@ best dev checkpoint; (2) deletion-decode improvement (del-F gap .06);
 (3) dualdtw mismatch + Batik numbers landing in suite now. Standing wins
 already banked: Bar C folded-score (0.992 pooled, structure 44/44, no
 symbolic competition) and ins-F on the holdout.
+
+**~15:15 TRAINING MOVED TO bwUniCluster 3.0** (Niels' directive via HPC agent):
+local v3 stopped at its e4 checkpoint, autopilot disarmed (no-op now), option
+(a) chosen — cluster resumes runs/v3/last.pt on an H100 (gpu_h100, empty
+queues, minutes/epoch vs 80 min local). Corpus synced (selfsup-v2b hardlink
+caveat flagged); evals stay on the Mac (checkpoints ship back to runs/).
+Declined CPU-reference run. Next: re-match on the holdout as soon as cluster
+checkpoints arrive and dev-beat v1c-e3. Suite continues locally (gluenote/
+mismatch/Batik in the gap window).
