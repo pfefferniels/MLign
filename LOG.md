@@ -442,3 +442,9 @@ early. a+b shards UPLOADED; c+d at ~6.8k/8000; selfsup-v3 done (14,830 rows).
 Their uploader gained line-count completion gating after my SIGSTOP exposed
 a truncated-upload hazard — teamwork catch. v3 on H100: e15 val_acc .9457,
 finishing ~16:30 cluster time.
+
+**~16:50 v3-e23 home (H100, 33 min for 20 epochs, val_acc .9551 still
+descending).** Dev: clean .99642 / mm .9700 / folded .9943 / ins .731 — wash
+vs v1c-e3 (dev can't see the ornament pieces). RE-MATCH RUNNING on holdout.
+Scaled run updated: --epochs 96; selfsup-v4 (fresh seed → real new windows +
+corruptions) replaces the v3b hardlink; final glob sent to HPC agent.
