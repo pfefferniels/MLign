@@ -20,3 +20,32 @@ wrote eval/results/dualdtw-robust-test.json
 14:03:02 DONE dualdtw-robust-test (exit 0)
 14:03:02 START model-robust-test
 ...50/84 (1306s)
+{
+  "match_f": 0.9811034370141682,
+  "match_p": 0.9807838410623194,
+  "match_r": 0.981424926758594,
+  "insertion_f": 0.9280941557800899,
+  "deletion_f": 0.7649065517512108,
+  "n": 84,
+  "failures": 0,
+  "aligner": "model:runs/v1c/best.pt",
+  "seconds": 3454.4
+}
+wrote eval/results/mlign-robust-test.json
+15:00:46 DONE model-robust-test (exit 0)
+15:00:46 START dualdtw-4x22mm
+SKIP Chopin_op10_no3_p01.npz: 'gt_alignment is not a file in the archive'
+Traceback (most recent call last):
+  File "/Users/nielspfeffer/Projects/MLign/eval/run_4x22_mismatch.py", line 202, in <module>
+    main()
+    ~~~~^^
+  File "/Users/nielspfeffer/Projects/MLign/eval/run_4x22_mismatch.py", line 180, in main
+    triples = aligner(score, perf2)
+  File "/Users/nielspfeffer/Projects/MLign/eval/run_4x22_mismatch.py", line 152, in aligner
+    pred = _m(sna, pna)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages/parangonar/match/matchers.py", line 2013, in __call__
+    score_note_array["is_grace"] == False
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+ValueError: no field of name is_grace
+15:00:56 DONE dualdtw-4x22mm (exit 1)
+15:00:56 START gluenote-robust-test

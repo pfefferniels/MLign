@@ -377,3 +377,18 @@ inhibitors + mpmify's waiting chain matched the pattern) → anchored
 
 **~14:20 THE BAR: DualDTW on nASAP robust-test (84 perfs, untouched holdout):
 match F 0.9852 ± 0.0170 (ins .9225, del .8237).** My model's run in progress.
+
+**~14:35 THE HEAD-TO-HEAD (nASAP robust test, 84 perfs, untouched):**
+| | match F | ins F | del F |
+| DualDTW | 0.9852 ± 0.0170 | 0.9225 | 0.8237 |
+| MLign (v1c-e3) | 0.9811 ± 0.0231 | **0.9281** | 0.7649 |
+Per-perf: 17 wins / 2 ties / 65 losses. VERDICT: not yet — DualDTW holds the
+holdout; my dev-set numbers flattered. I WIN insertions; lose deletions and
+overall. Loss concentration: ornament-dense Bach preludes (bwv_873 −0.04,
+long trills!) + one Beethoven mvt — and the evaluated checkpoint PREDATES
+the ornament corpus (v1c-e3). The running v3 (ornaments+exaggeration+34%
+real) targets exactly these. Plan: (1) v3 to ~e10, re-run holdout with its
+best dev checkpoint; (2) deletion-decode improvement (del-F gap .06);
+(3) dualdtw mismatch + Batik numbers landing in suite now. Standing wins
+already banked: Bar C folded-score (0.992 pooled, structure 44/44, no
+symbolic competition) and ins-F on the holdout.
