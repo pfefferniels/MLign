@@ -525,3 +525,8 @@ cosine phase may recover); (b) checkpoint SELECTION moves to dev benchmarks,
 not cluster val; (c) v4small (morning) may transfer better; (d) for the next
 run: dev-proxy in cluster val (mix real windows into val split explicitly) or
 early-epoch bias. The night decides via snapshots.
+
+**~22:55 Snapshot sweep e23/e27 (44-file): .9896/.9901 — overfit plateau
+persists mid-schedule; bet is on late-cosine re-generalization (e60+),
+else v3-e23 stays champion and the scaled lesson = "capacity needs more real
+data, not more epochs." e29 val .9877.
