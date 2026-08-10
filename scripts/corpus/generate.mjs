@@ -35,12 +35,13 @@ const PRESETS = { none: {}, light: presetLight, medium: presetMedium, heavy: pre
 
 function parseArgs(argv) {
   const pos = [];
-  const opt = { robustness: 'medium', jitter: 12, ornaments: 0 };
+  const opt = { robustness: 'medium', jitter: 12, ornaments: 0, exaggerate: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--robustness') opt.robustness = argv[++i];
     else if (a === '--jitter') opt.jitter = Number(argv[++i]);
     else if (a === '--ornaments') opt.ornaments = Number(argv[++i]);
+    else if (a === '--exaggerate') opt.exaggerate = true;
     else pos.push(a);
   }
   if (pos.length !== 3) {
@@ -154,10 +155,34 @@ export function normalizeOrnaments(data, scoreIdSet) {
   return touched ? { ...data, parts } : data;
 }
 
+// Exaggeration axis (meico-ts-exag branch, pinned 3432d25; dynamic import so
+// the generator still runs where the worktree is absent).
+const EXAG_DIST = '/Users/nielspfeffer/Projects/meico-ts-exag/dist/index.js';
+let exagMod = null;
+export async function loadExaggeration() {
+  if (exagMod === null) exagMod = await import(EXAG_DIST);
+  return exagMod;
+}
+
+/** Log-uniform s-vector sampler over the safe curriculum ranges. */
+export function sampleExagFactors(rng) {
+  const lu = (lo, hi) => Math.exp(Math.log(lo) + rng.nextDouble() * (Math.log(hi) - Math.log(lo)));
+  return {
+    tempo: lu(0.5, 2.0),
+    dynamics: lu(0.6, 1.7),
+    rubato: lu(0.5, 2.0),
+    articulation: lu(0.6, 1.6),
+  };
+}
+
 /** One corpus row, or null when an invariant fails. */
-export function buildSample(piece, robustnessCfg, seedStr, ornMapXml = '') {
+export function buildSample(piece, robustnessCfg, seedStr, ornMapXml = '', exagFactors = null) {
   const { msm, mpm: mpmBase } = documentsFor(piece);
-  const mpm = injectOrnaments(mpmBase, ornMapXml);
+  let mpm = injectOrnaments(mpmBase, ornMapXml);
+  if (exagFactors !== null) {
+    if (exagMod === null) throw new Error('call loadExaggeration() first');
+    mpm = exagMod.exaggerateMpm(mpm, { factors: exagFactors, msm }).mpm;
+  }
   const rendered = captureConsole(() => performMsmToData({ msm, mpm })).value;
   const scoreIdSet = new Set();
   for (const part of piece.parts) {
@@ -226,8 +251,9 @@ export function buildSample(piece, robustnessCfg, seedStr, ornMapXml = '') {
   };
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.exaggerate) await loadExaggeration();
   const preset = PRESETS[args.robustness];
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
   const cfg = mergeConfig({ ...preset, jitter: { stdMs: args.jitter } });
@@ -243,9 +269,10 @@ function main() {
     const rng = new JavaRandom(args.seed * 1000003n + BigInt(i));
     const piece = samplePieceV4(rng, i, WANT, OPT);
     const ornMap = args.ornaments > 0 ? sampleOrnaments(piece, rng, args.ornaments) : '';
+    const exagFactors = args.exaggerate ? sampleExagFactors(rng) : null;
     let row;
     try {
-      row = buildSample(piece, cfg, `${args.seed}:${i}`, ornMap);
+      row = buildSample(piece, cfg, `${args.seed}:${i}`, ornMap, exagFactors);
     } catch (err) {
       process.stderr.write(`piece ${i} render failed: ${err.message}\n`);
       row = null;
