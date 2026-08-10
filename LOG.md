@@ -348,3 +348,9 @@ Exag-curriculum shards after gap window.
 **~10:10 (day 2)** Second sleep (~02:30-09:07) — zero loss: autopilot revived
 v2 trainer, gap-runner re-armed 09:07, mpmify's v31 resumed too. Epoch 5
 cooking; gap suite fires whenever v31 actually exits (relative window).
+
+**~11:15 v2-e5** (val_acc .880): clean .9954 / mm .9697 / folded .9946
+(structure 44/44) / ins-F .717 (recovering from e4 dip .679). Benchmarks in a
+.995-.997 band while val climbs — residual = repeated-chords + GT label
+variance; ornament-effect verdict at e6-e8. v31 still running (epoch times
+inflated by contention: e5 took 9.7h wall incl. sleep).
