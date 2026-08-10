@@ -401,3 +401,13 @@ caveat flagged); evals stay on the Mac (checkpoints ship back to runs/).
 Declined CPU-reference run. Next: re-match on the holdout as soon as cluster
 checkpoints arrive and dev-beat v1c-e3. Suite continues locally (gluenote/
 mismatch/Batik in the gap window).
+
+**~15:30 THREE-WAY HOLDOUT TABLE (nASAP robust test, 84 perfs):**
+| system | match F | ins F | del F |
+| DualDTW (hand-tuned SOTA) | 0.9852 ± .017 | .9225 | .8237 |
+| **MLign v1c-e3 (learned)** | **0.9811 ± .023** | **.9281** | .7649 |
+| TheGlueNote (learned, ISMIR24) | 0.9778 ± .025 | .8206 | .8148 |
+→ MLign is the best LEARNED aligner on the holdout (beats TheGlueNote,
+best ins-F overall) with a checkpoint that predates the ornament corpus.
+Remaining gap to DualDTW: 0.004, concentrated in trill-heavy Bach + del-F.
+H100 training targets both. Batik + dualdtw-mismatch still in suite.
