@@ -465,3 +465,11 @@ selfsup-v3 upload (607MB) + selfsup-v4 generation.
   MLign 0.9751 (v1c-e3) — statistical tie.
 Re-match (v3-e23 on holdout) relaunched detached after session-limit kill.
 selfsup-v4 done; scaled-run submission waits on uploads.
+
+**~17:45 Cluster standing invitation + decisions.** HPC agent runs jobs on
+request while Niels away (SSH socket fragile — submit-now bias; long jobs
+safe once queued). Decisions: (1) v4h100 runs all 96 epochs, NO mid-run
+supervision (best.pt is val-selected; socket-death-proof); every-4-epochs
+ckpt pulls → passive local dev-benchmarking. (2) Queued v4small (d192/L4,
+same corpus+schedule) as scale ablation after v4h100. Re-match + dualdtw-batik
+chain running locally.
