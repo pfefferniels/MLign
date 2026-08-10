@@ -503,3 +503,9 @@ target-corpus sample, never a convenient subset (512-note selfsup windows
 pack 3.3x worse than short synthetic — my packing diagnosis confirmed);
 also "staged 2.2G vs probe's 106MB" was a 20x signal read past. Night on
 rails: checkpoints → dev evals → holdout trigger at >.9968.
+
+**~20:30 Decode sweep verdict:** tol 1.5-2.0 gives +5-11pts dev ins-F but
+costs Bar B (-0.7pt mismatch) — corruption regime punishes loose matching.
+Kept 1.0/0.35 (Bar B is a knife-fight: .9751 vs dualdtw .9757). Adaptive
+tolerance (tight in dense/corrupt contexts, wide near isolated trills) =
+identified future work. v4h100 at e8 val .9698, steep.
