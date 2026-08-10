@@ -495,3 +495,11 @@ Scaled model at e2 already 0.9960 dev-clean (par with small model's best).
 clean .9960 (subset numbers flatter — full-87 is the only truth), del .870
 best-yet, ins dipped .63 (transient). Milestone cadence now: full evals at
 ~e12/e24/pre-kill; holdout fires when full-87 clean > .9968.
+
+**~19:35 v4h100 RESUBMITTED (option 1 executed by HPC agent):** job 6247279,
+14h limit, resumes e6 w/ cosine intact, ETA ~05:00; v4small requeued
+(afterok:6247279, 10h realistic limit). Their postmortem: probe must run on
+target-corpus sample, never a convenient subset (512-note selfsup windows
+pack 3.3x worse than short synthetic — my packing diagnosis confirmed);
+also "staged 2.2G vs probe's 106MB" was a 20x signal read past. Night on
+rails: checkpoints → dev evals → holdout trigger at >.9968.
