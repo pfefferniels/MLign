@@ -5,6 +5,17 @@
 #   sbatch --export=ALL,RUN=runs/c1,EPOCHS=24 slurm/train.sbatch
 #   sbatch -p dev_gpu_h100 -t 00:30:00 --export=ALL,RUN=runs/smoke,EPOCHS=1 slurm/train.sbatch
 #
+# CORPUS_GLOBS MUST NOT be passed inside --export=... : sbatch splits that list
+# on commas, so a comma-separated glob list is silently truncated at the first
+# comma and the job trains on a fraction of the corpus while reporting success.
+# Export it into the environment instead and let --export=ALL carry it:
+#
+#   export CORPUS_GLOBS='v1-*.jsonl,v2orn-light.jsonl,selfsup-v2.jsonl'
+#   sbatch --export=ALL,RUN=runs/v4h100,EPOCHS=96 slurm/train.sbatch
+#
+# The "staged N corpus files" line in the log is the check: verify it matches
+# what you expect before trusting a run.
+#
 # Corpus is staged to node-local NVMe ($TMPDIR) because the batcher re-reads the
 # raw JSONL every epoch; Lustre hates that access pattern.
 #

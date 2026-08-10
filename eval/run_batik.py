@@ -68,7 +68,53 @@ def main() -> None:
     args = ap.parse_args()
 
     name = f"model:{args.ckpt}" if args.ckpt else args.aligner
-    aligner = get_aligner(name)
+    if args.aligner in ("dualdtw", "automatic", "gluenote"):
+        # Table-based adapter: parangonar must see the SAME match-file-derived
+        # tables as the model (its default adapter re-parses MusicXML/MIDI and
+        # lands in a different id space → scores 0 here).
+        import contextlib
+        import io
+        import warnings
+
+        import numpy as np
+        import parangonar as pa
+
+        matcher = {
+            "dualdtw": pa.DualDTWNoteMatcher,
+            "automatic": pa.AutomaticNoteMatcher,
+            "gluenote": pa.TheGlueNoteMatcher,
+        }[args.aligner]()
+
+        def aligner(entry, score, perf, _m=matcher):
+            sna = np.empty(len(score.notes), dtype=[
+                ("onset_beat", "f8"), ("duration_beat", "f8"), ("pitch", "i4"),
+                ("voice", "i4"), ("id", "U32"), ("is_grace", "b"),
+            ])
+            for dst, src in [("onset_beat", "onset"), ("duration_beat", "duration"),
+                             ("pitch", "pitch"), ("voice", "voice"), ("id", "id")]:
+                sna[dst] = score.notes[src]
+            sna["is_grace"] = 0
+            pna = np.empty(len(perf.notes), dtype=[
+                ("onset_sec", "f8"), ("duration_sec", "f8"), ("pitch", "i4"),
+                ("velocity", "i4"), ("id", "U32"),
+            ])
+            for dst, src in [("onset_sec", "onset"), ("duration_sec", "duration"),
+                             ("pitch", "pitch"), ("velocity", "velocity"), ("id", "id")]:
+                pna[dst] = perf.notes[src]
+            with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()):
+                warnings.simplefilter("ignore")
+                pred = _m(sna, pna)
+            out = []
+            for d in pred:
+                if d["label"] == "match":
+                    out.append({"label": "match", "score_id": d["score_id"], "perf_id": d["performance_id"]})
+                elif d["label"] == "deletion":
+                    out.append({"label": "deletion", "score_id": d["score_id"]})
+                elif d["label"] in ("insertion", "ornament"):
+                    out.append({"label": "insertion", "perf_id": d["performance_id"]})
+            return out
+    else:
+        aligner = get_aligner(name)
 
     matches = sorted((BATIK / "match").glob("*.match"))
     if args.limit:
