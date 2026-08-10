@@ -448,3 +448,11 @@ descending).** Dev: clean .99642 / mm .9700 / folded .9943 / ins .731 — wash
 vs v1c-e3 (dev can't see the ornament pieces). RE-MATCH RUNNING on holdout.
 Scaled run updated: --epochs 96; selfsup-v4 (fresh seed → real new windows +
 corruptions) replaces the v3b hardlink; final glob sent to HPC agent.
+
+**~17:00 Scaled-run sizing probed on H100:** d320/L8/32k = 6.28M params,
+1.24 ms/piece (2x FASTER per piece than d192/L4@6k tokens — token budget was
+starving the GPU, not model size). 96 epochs ≈ 2.8h. HPC agent caught a
+silent CORPUS_GLOBS truncation bug in sbatch (comma-split → would have
+trained on 1/5 corpus reporting COMPLETED — the nightmare class). Verification
+habit adopted: staged-file-count line checked every run. Submission waits on
+selfsup-v3 upload (607MB) + selfsup-v4 generation.
