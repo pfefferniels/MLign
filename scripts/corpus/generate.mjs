@@ -157,7 +157,7 @@ export function normalizeOrnaments(data, scoreIdSet) {
 
 // Exaggeration axis (meico-ts-exag branch, pinned 3432d25; dynamic import so
 // the generator still runs where the worktree is absent).
-const EXAG_DIST = '/Users/nielspfeffer/Projects/meico-ts-exag/dist/index.js';
+const EXAG_DIST = '/Users/nielspfeffer/Projects/meico-ts/dist/index.js'; // main @ 9974ba3
 let exagMod = null;
 export async function loadExaggeration() {
   if (exagMod === null) exagMod = await import(EXAG_DIST);
