@@ -434,3 +434,11 @@ foreign vitest); Niels' machine-relief directive applies in spirit →
 SIGSTOPped v4syn-c/d (staged resume after a+b) + paused Batik/mismatch eval
 chain (resumes after all shards). Remaining local: 2 niced generators +
 selfsup-v3 tail. HPC agent escalated load honestly to Niels — correct call.
+
+**~16:15 Load mystery solved by HPC agent:** 36h-orphaned meico-ts vitest
+(reaped; not ours) + Niels' Büroklammer widget spinning under Rosetta (his
+call) — load 22.9→9.2. My throttle partially over-corrected; evals resumed
+early. a+b shards UPLOADED; c+d at ~6.8k/8000; selfsup-v3 done (14,830 rows).
+Their uploader gained line-count completion gating after my SIGSTOP exposed
+a truncated-upload hazard — teamwork catch. v3 on H100: e15 val_acc .9457,
+finishing ~16:30 cluster time.
