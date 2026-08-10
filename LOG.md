@@ -509,3 +509,9 @@ costs Bar B (-0.7pt mismatch) — corruption regime punishes loose matching.
 Kept 1.0/0.35 (Bar B is a knife-fight: .9751 vs dualdtw .9757). Adaptive
 tolerance (tight in dense/corrupt contexts, wide near isolated trills) =
 identified future work. v4h100 at e8 val .9698, steep.
+
+**~21:00 BATIK: FIRST FULL-BENCHMARK WIN.** 36 movements, table-parity
+harness: MLign 0.9931 ± .0053 vs DualDTW 0.9920 ± .0087 (their published:
+0.994±.7). Scoreboard now: Batik WIN, holdout −0.0019, Bar B tie (.9751 vs
+.9757), Bar C ours alone (.992 pooled), TheGlueNote beaten everywhere.
+v4h100 e10 val .976, ~05:00 finish.
