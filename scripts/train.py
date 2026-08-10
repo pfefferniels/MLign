@@ -35,12 +35,17 @@ def main() -> None:
     ap.add_argument("--d-model", type=int, default=192)
     ap.add_argument("--n-layers", type=int, default=4)
     ap.add_argument("--matchability", action="store_true")
-    ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu"])
+    ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
 
     if args.device == "auto":
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
     else:
         device = args.device
     if device == "cpu":
