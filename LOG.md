@@ -411,3 +411,14 @@ mismatch/Batik in the gap window).
 best ins-F overall) with a checkpoint that predates the ornament corpus.
 Remaining gap to DualDTW: 0.004, concentrated in trill-heavy Bach + del-F.
 H100 training targets both. Batik + dualdtw-mismatch still in suite.
+
+**~16:20 Batik harness bug found+fixed** — perf ids must come from the match
+file's own note() lines (GT numbers non-sequentially per movement; MIDI-parse
+remap only coincidentally right on kv279). kv279_2 "catastrophe" was the
+artifact: 0.27 → 0.9883. First 4 movements now .9945 mean (DualDTW published
+Batik: .994). Full 36-movement reruns (both systems) + fixed dualdtw-mismatch
+leg running. **H100 LIVE: job 6242547, 102.5s/epoch (47x), e5 val_acc .9068,
+trajectory intact; done ~35 min.** HPC agent's --max-tokens pushback accepted
+(they were right — resume trajectory purity). Scaled-run plan: fresh corpus
+3-5x (local generation), d256-320/L6-8, max-tokens 24-32k, ckpts every 4
+epochs.
