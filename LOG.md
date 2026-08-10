@@ -374,3 +374,6 @@ untouched holdout), then dualdtw on my mismatch protocol, then Batik both.
 Two runner bugs fixed en route: any-caffeinate blocking (transient -t 300
 inhibitors + mpmify's waiting chain matched the pattern) → anchored
 "^caffeinate -is python3".
+
+**~14:20 THE BAR: DualDTW on nASAP robust-test (84 perfs, untouched holdout):
+match F 0.9852 ± 0.0170 (ins .9225, del .8237).** My model's run in progress.

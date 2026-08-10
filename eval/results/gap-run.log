@@ -4,3 +4,18 @@
 13:37:17 gap-runner armed; waiting for caffeinate to exit
 13:37:17 GAP OPEN
 13:37:17 START dualdtw-robust-test
+...50/84 (620s)
+{
+  "match_f": 0.9851893338734786,
+  "match_p": 0.9851670381614019,
+  "match_r": 0.985213926249526,
+  "insertion_f": 0.9225266736341851,
+  "deletion_f": 0.8237287621755862,
+  "n": 84,
+  "failures": 0,
+  "aligner": "dualdtw",
+  "seconds": 1529.9
+}
+wrote eval/results/dualdtw-robust-test.json
+14:03:02 DONE dualdtw-robust-test (exit 0)
+14:03:02 START model-robust-test
