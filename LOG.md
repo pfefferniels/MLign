@@ -354,3 +354,6 @@ cooking; gap suite fires whenever v31 actually exits (relative window).
 .995-.997 band while val climbs — residual = repeated-chords + GT label
 variance; ornament-effect verdict at e6-e8. v31 still running (epoch times
 inflated by contention: e5 took 9.7h wall incl. sleep).
+
+**~12:20 Exaggeration campaign merged upstream** (meico-ts main 9974ba3);
+import repointed, smoke green. All peer campaigns concluded and integrated.
