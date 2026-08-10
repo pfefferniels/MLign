@@ -141,6 +141,54 @@ def load_tsv(path: str | Path) -> Alignment:
     return Alignment(frozenset(matches), frozenset(insertions), frozenset(deletions))
 
 
+_NOTE_FULL = re.compile(
+    r"-note\(([^,]+),(-?\d+),(-?\d+),(-?\d+),(-?\d+),"
+)
+_INS_NOTE_FULL = re.compile(
+    r"^insertion-note\(([^,]+),(-?\d+),(-?\d+),(-?\d+),(-?\d+),"
+)
+
+
+def perf_notes_from_match(path: str | Path) -> list[dict]:
+    """Performance-side note records from the match file's own note( lines —
+    the GT id space by construction (never trust MIDI-parse note numbering to
+    reproduce it; Batik numbers notes non-sequentially). Times in seconds via
+    the header's midiClockUnits/midiClockRate."""
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    units, rate = 480.0, 500000.0
+    m = re.search(r"info\(midiClockUnits,(\d+)\)", text)
+    if m:
+        units = float(m.group(1))
+    m = re.search(r"info\(midiClockRate,(\d+)\)", text)
+    if m:
+        rate = float(m.group(1))
+    sec_per_tick = rate / 1e6 / units
+
+    records = []
+    seen: set[str] = set()
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = _INS_NOTE_FULL.match(line) if line.startswith("insertion-note(") else (
+            _NOTE_FULL.search(line) if "-note(" in line else None
+        )
+        if not m:
+            continue
+        nid, pitch, on, off, vel = m.groups()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        records.append(
+            {
+                "id": nid,
+                "pitch": int(pitch),
+                "onset": int(on) * sec_per_tick,
+                "duration": max(0.001, (int(off) - int(on)) * sec_per_tick),
+                "velocity": max(1, min(127, int(vel))),
+            }
+        )
+    return records
+
+
 @dataclass
 class NasapIndex:
     """All performances of the dataset with their score and GT paths."""

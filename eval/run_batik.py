@@ -29,6 +29,21 @@ from mlign.tables import PerfTable, ScoreTable  # noqa: E402
 BATIK = ROOT / "data/benchmarks/batik_plays_mozart"
 
 
+def perf_from_match(match_path: Path) -> PerfTable:
+    import numpy as np
+
+    from nasap import perf_notes_from_match
+
+    records = perf_notes_from_match(match_path)
+    arr = np.empty(
+        len(records),
+        dtype=[("onset", "f8"), ("duration", "f8"), ("pitch", "i4"), ("velocity", "i4"), ("id", "U32")],
+    )
+    for i, r in enumerate(records):
+        arr[i] = (r["onset"], r["duration"], r["pitch"], r["velocity"], r["id"])
+    return PerfTable(arr[np.lexsort((arr["pitch"], arr["onset"]))])
+
+
 def score_from_match(match_path: Path) -> ScoreTable:
     import numpy as np
 
@@ -71,20 +86,12 @@ def main() -> None:
             print(f"SKIP {stem}: missing files", file=sys.stderr)
             continue
         try:
-            # Score from the match file (create_score=True): Batik's GT id space
-            # is the PERFORMED unfolding (some repeats taken), not the maximal
-            # one — parangonar's papers evaluate the same way. MusicXML in
-            # scores/ is only the notation source.
+            # BOTH sides from the match file: score = GT's performed unfolding;
+            # perf = the note( lines (GT numbers notes NON-sequentially on many
+            # movements — MIDI-parse remapping is wrong beyond kv279).
             score = score_from_match(mf)
-            perf = PerfTable.from_midi(entry["midi"])
+            perf = perf_from_match(mf)
             triples = aligner(entry, score, perf)
-            # Batik matchfiles number performance notes n1.. (1-based); partitura
-            # yields P01_n0.. for these single-track MIDIs (verified on kv279_1:
-            # P01_n{k} == GT n{k+1} by pitch+tick). Remap before scoring.
-            for t in triples:
-                pid = t.get("perf_id")
-                if pid and pid.startswith("P01_n"):
-                    t["perf_id"] = f"n{int(pid[5:]) + 1}"
             pred = triples_to_alignment(triples)
             truth = load_match(mf)
             s = AlignmentScore.compare(truth, pred)

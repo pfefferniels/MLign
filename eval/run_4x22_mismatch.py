@@ -141,12 +141,22 @@ def main() -> None:
         }[args.aligner]()
 
         def aligner(score, perf, _m=matcher):
-            sna = np.lib.recfunctions.rename_fields(
-                score.notes, {"onset": "onset_beat", "duration": "duration_beat"}
-            )
-            pna = np.lib.recfunctions.rename_fields(
-                perf.notes, {"onset": "onset_sec", "duration": "duration_sec"}
-            )
+            # full field set parangonar's matchers touch (incl. is_grace)
+            sna = np.empty(len(score.notes), dtype=[
+                ("onset_beat", "f8"), ("duration_beat", "f8"), ("pitch", "i4"),
+                ("voice", "i4"), ("id", "U32"), ("is_grace", "b"),
+            ])
+            for f_dst, f_src in [("onset_beat", "onset"), ("duration_beat", "duration"),
+                                 ("pitch", "pitch"), ("voice", "voice"), ("id", "id")]:
+                sna[f_dst] = score.notes[f_src]
+            sna["is_grace"] = 0
+            pna = np.empty(len(perf.notes), dtype=[
+                ("onset_sec", "f8"), ("duration_sec", "f8"), ("pitch", "i4"),
+                ("velocity", "i4"), ("id", "U32"),
+            ])
+            for f_dst, f_src in [("onset_sec", "onset"), ("duration_sec", "duration"),
+                                 ("pitch", "pitch"), ("velocity", "velocity"), ("id", "id")]:
+                pna[f_dst] = perf.notes[f_src]
             with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()):
                 warnings.simplefilter("ignore")
                 pred = _m(sna, pna)
