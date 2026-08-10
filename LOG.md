@@ -428,3 +428,9 @@ ornaments 0.3-0.35, two with exaggeration; selfsup-v3 20-window ~15k).
 Ceiling-probe run agreed: d320/L8, max-tokens 32k, 40 epochs, fresh, ~85k
 rows w/ ≥30% real (server-side hardlink oversampling). HPC agent pipelines
 shard uploads as they land. H100 v3 finishing ~16:35 (e6 val_acc .9251).
+
+**~16:05 Self-throttle.** Load spiked to 69 (multiple contributors incl.
+foreign vitest); Niels' machine-relief directive applies in spirit →
+SIGSTOPped v4syn-c/d (staged resume after a+b) + paused Batik/mismatch eval
+chain (resumes after all shards). Remaining local: 2 niced generators +
+selfsup-v3 tail. HPC agent escalated load honestly to Niels — correct call.
