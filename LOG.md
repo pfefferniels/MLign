@@ -357,3 +357,12 @@ inflated by contention: e5 took 9.7h wall incl. sleep).
 
 **~12:20 Exaggeration campaign merged upstream** (meico-ts main 9974ba3);
 import repointed, smoke green. All peer campaigns concluded and integrated.
+
+**~13:30 Ornament-mix verdict + v3 rebalance.** e6 (val .899) benchmarks fell
+2 epochs straight (clean .9940, ins-F .660, mm .9661) — v2orn 25% share
+overfits synthetic ornament stats at real-transfer's expense. v3: warm-start
+from v1c-e3 weights (best transfer); mix = v1 16k + v2orn-light 4k (halved) +
+v3exag 8k (NEW: exaggeration curriculum) + selfsup ×2 via hardlink (14.8k,
+34% real). 4x22 = dev set (model selection); nASAP robust-test stays untouched
+as headline. Exag shards done (2×4000). All 3 peer campaigns merged upstream
++ integrated.
