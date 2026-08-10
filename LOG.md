@@ -337,3 +337,10 @@ cutoff; log eval/results/gap-run.log. v2 training runs through (warm-started,
 mm .9722 / folded .9943 (structure 44/44) / ins-F .679 — small transient dip
 vs v1c-e3 (boundaries migrating to new insertion patterns); judge at e6-e8.
 v31 still running (mpmify ETA ~03:00); gap-runner waiting.
+
+**~02:20 Exaggeration axis integrated** (usable-commit ping received; pinned
+meico-ts-exag @ 3432d25). --exaggerate flag: log-uniform s over tempo
+[0.5,2]/dynamics [0.6,1.7]/rubato [0.5,2]/articulation [0.6,1.6]; composes
+with --ornaments; 6-piece smoke green, id-set invariance verified. All three
+peer deliverables now integrated (ornaments, exaggeration, shared samplers).
+Exag-curriculum shards after gap window.
