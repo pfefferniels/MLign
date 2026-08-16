@@ -584,3 +584,9 @@ follow-up if the curve is peaky. stgall joins cluster; no contention.
 DIRECT MEASUREMENT of the mixed-val blindness: the divergence epoch (real loss
 rising while mixed still falls) will be an artifact in its own right for the
 write-up. Cluster agent flags it when it appears.
+
+**~16:05 v5real-e005: NEW DEV RECORD ON EVERY AXIS.** clean 0.9975 (prev best
+.9964) / ins .761 (.731) / del .900 (.822) / folded .9965 pooled .9931 (best
+ever) / mismatch .9695 (≈). Five epochs, 1.5M params, 47% real data + real GT
+selection — the recipe works. HOLDOUT RE-MATCH FIRED with snap-e005 (bar
+DualDTW .9852; prev MLign best .9833). Later snapshots (e007+) queued for dev.
