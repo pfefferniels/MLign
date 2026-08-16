@@ -567,3 +567,15 @@ out of the v5real glob — restored; 16 train files; real share ≈47% (highest
 yet). Val corpus staged in its own $TMPDIR dir on cluster (training globs
 cannot swallow it). Lesson: enumerate the mix as a checked list, not a glob
 rewrite.
+
+**~15:35 v5real RUNNING (job 6331678, all 3 gates verified in log; 16 files,
+2.4G; val staged in own dir; puller 5-min).** Null-bias sweep (±0.5, ±1.0 on
+null logits, v3 ckpt): IDENTICAL dev numbers — null confidence never reaches
+the decision: phase-2 assignment is time-map+pitch-DP driven, nulls only fall
+out as leftovers. So ins/del balance = decode-structure lever (tolerance/
+rescue, trades vs Bar B) or MODEL-side (matchability head → decode should
+consult it before leftover labelling: unmatched-but-high-matchability perf
+note near a matched score note of same pitch = ornament neighbor, not
+insertion). Latter = next decode iteration. Cluster agent notes: snapshot
+resolution 2 epochs may straddle a sharp early peak → --snapshot-every 1
+follow-up if the curve is peaky. stgall joins cluster; no contention.
