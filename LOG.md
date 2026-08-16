@@ -609,3 +609,14 @@ windowed-inference path: 5041-note pieces run through coarse_windows —
 window-stitching may itself be the failure surface for long pieces
 (v3 also scores only .893 there). Next: (b) first — instrument window
 boundaries on 16-2; then (a) for v6.
+
+**~17:30 Root cause narrowed + fix in flight.** Windowing verified clean on
+the worst piece (0/8840 true pairs outside their window; coarse baseline
+.885 there — intrinsically hard, 10% skipped). So the loss is the model's
+leftover decisions on repertoire the SELECTION set never sees. Fix: realgt2
+— val2 built by holdout composer QUOTA (Bee 30/Bach 21/Chopin 14/Liszt 10/
+Schumann 6/Rach 2 = 83 perfs from 54 train-split pieces, deletion-heavy
+preferred; NO test pieces), train2 = remaining 448 train-split perfs. v6
+= v5real recipe with realgt2 (both roles) → cluster once generated. Also
+plan: dev set (4x22) is a weak proxy too — add a second dev tier: 20 train2
+performances (long sonatas) evaluated with the FULL decode = "dev-long".
