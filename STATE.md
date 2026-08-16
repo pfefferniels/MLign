@@ -1,6 +1,6 @@
 # MLign — STATE (compaction-proof summary)
 
-Budget: UNKNOWN / share 9.1% (tier low) / THROTTLE (Stand 2026-08-16T21:10+02:00)
+Budget: UNKNOWN / share 9.1% (tier low) / THROTTLE (Stand 2026-08-16T21:45+02:00) — repo PUBLIC at github.com/pfefferniels/MLign
 Rule (verwaltung/Niels, 2026-08-16): run `credits budget --agent mlign --json` at
 the start of every cycle; RUN=normal, THROTTLE=no new expensive fronts, defer
 discretionary phases, fan-out ≤3 (model choice is mine; Opus 5 or smaller),
