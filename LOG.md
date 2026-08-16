@@ -562,3 +562,8 @@ finally). Generating realgt-val + realgt-train now.
 finally live) + snapshots every 2 epochs (atomic writes) → dev picks the
 true best. 15 train files, 32 epochs, d192/L4, ~2.2h. Also: new stgall agent
 routed to the cluster bridge (Niels pointed it at me by mistake).
+**~16:20 Correction (caught by cluster agent):** selfsup-v2b twin had fallen
+out of the v5real glob — restored; 16 train files; real share ≈47% (highest
+yet). Val corpus staged in its own $TMPDIR dir on cluster (training globs
+cannot swallow it). Lesson: enumerate the mix as a checked list, not a glob
+rewrite.
