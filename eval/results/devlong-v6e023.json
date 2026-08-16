@@ -1,0 +1,154 @@
+{
+  "aggregate": {
+    "match_f": 0.9573417438201822,
+    "match_p": 0.956433643945403,
+    "match_r": 0.9583126056307378,
+    "insertion_f": 0.8833635049198459,
+    "deletion_f": 0.8104254499044451,
+    "n": 20,
+    "aligner": "model:runs/v6real2/snap-e023.pt",
+    "seconds": 1253.0
+  },
+  "rows": [
+    {
+      "piece": "Beethoven/Piano_Sonatas/29-4",
+      "performer": "ChowK05M",
+      "match_f": 0.8898397174680793,
+      "n_score": 8500,
+      "del_rate": 0.154
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/17-1_no_repeat",
+      "performer": "Nedayvoda01",
+      "match_f": 0.967397747480735,
+      "n_score": 2876,
+      "del_rate": 0.12
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/21-3",
+      "performer": "Sekino05M",
+      "match_f": 0.9414375715922109,
+      "n_score": 7687,
+      "del_rate": 0.09
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/17-3",
+      "performer": "USHIKI05M",
+      "match_f": 0.9932711604297013,
+      "n_score": 4604,
+      "del_rate": 0.08
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/17-1_no_repeat",
+      "performer": "Song01",
+      "match_f": 0.9661080074487896,
+      "n_score": 2876,
+      "del_rate": 0.067
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/21-3",
+      "performer": "KimSY04M",
+      "match_f": 0.9285913918390163,
+      "n_score": 7687,
+      "del_rate": 0.067
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/22-1",
+      "performer": "IVLEVA01",
+      "match_f": 0.9466365374587172,
+      "n_score": 3064,
+      "del_rate": 0.06
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/26-1",
+      "performer": "Ali02",
+      "match_f": 0.9916125969298939,
+      "n_score": 3351,
+      "del_rate": 0.058
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/24-1_no_2_repeat",
+      "performer": "Cui06M",
+      "match_f": 0.994016454749439,
+      "n_score": 2832,
+      "del_rate": 0.056
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/5",
+      "performer": "WangY02M",
+      "match_f": 0.9637359770414818,
+      "n_score": 4548,
+      "del_rate": 0.155
+    },
+    {
+      "piece": "Liszt/Gran_Etudes_de_Paganini/2_La_campanella",
+      "performer": "Ali03",
+      "match_f": 0.9086466675716032,
+      "n_score": 4328,
+      "del_rate": 0.155
+    },
+    {
+      "piece": "Liszt/Gran_Etudes_de_Paganini/2_La_campanella",
+      "performer": "SEBAST02",
+      "match_f": 0.9307733910221743,
+      "n_score": 4328,
+      "del_rate": 0.15
+    },
+    {
+      "piece": "Liszt/Ballade_2",
+      "performer": "KIM_J04",
+      "match_f": 0.9732905146079737,
+      "n_score": 7308,
+      "del_rate": 0.128
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/5",
+      "performer": "Park03M",
+      "match_f": 0.9497705568646905,
+      "n_score": 4548,
+      "del_rate": 0.108
+    },
+    {
+      "piece": "Chopin/Etudes_op_25/1",
+      "performer": "TongB02M",
+      "match_f": 0.9769130998702983,
+      "n_score": 2232,
+      "del_rate": 0.136
+    },
+    {
+      "piece": "Chopin/Sonata_3/3rd",
+      "performer": "mikahailoff01",
+      "match_f": 0.9694249649368865,
+      "n_score": 2044,
+      "del_rate": 0.127
+    },
+    {
+      "piece": "Chopin/Sonata_3/3rd",
+      "performer": "GarritsonL10",
+      "match_f": 0.9733185102834909,
+      "n_score": 2044,
+      "del_rate": 0.119
+    },
+    {
+      "piece": "Chopin/Etudes_op_25/1",
+      "performer": "TuanS04M",
+      "match_f": 0.9531568228105907,
+      "n_score": 2232,
+      "del_rate": 0.118
+    },
+    {
+      "piece": "Schumann/Arabeske",
+      "performer": "ParkS15M",
+      "match_f": 0.962490023942538,
+      "n_score": 2926,
+      "del_rate": 0.143
+    },
+    {
+      "piece": "Schumann/Arabeske",
+      "performer": "Min09M",
+      "match_f": 0.9664031620553358,
+      "n_score": 2926,
+      "del_rate": 0.137
+    }
+  ]
+}

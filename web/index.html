@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLign — alignment test page</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #111827; --muted: #6b7280; --border: #e5e7eb; --hover: #f3f4f6;
+    --match: #2563eb; --ins: #dc2626; --del: #d97706; --sub: #7c3aed; --score: #374151; --perf: #0f766e;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: var(--bg); }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); }
+  main { padding: 16px 20px; display: grid; gap: 14px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; background: #fff; }
+  label.file { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; background: #fff; }
+  label.file:hover { background: var(--hover); }
+  label.file input { display: none; }
+  label.file .name { color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { border: 1px solid var(--fg); background: var(--fg); color: #fff; border-radius: 6px; padding: 7px 14px; cursor: pointer; font: inherit; }
+  button[disabled] { opacity: .45; cursor: default; }
+  button.secondary { background: #fff; color: var(--fg); }
+  .stats { display: flex; gap: 18px; color: var(--muted); }
+  .stats b { color: var(--fg); font-weight: 600; }
+  .legend { display: flex; gap: 14px; color: var(--muted); font-size: 13px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+  #viz { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+  #viz svg { display: block; width: 100%; height: 620px; }
+  #tip { position: absolute; pointer-events: none; background: #111827; color: #fff; padding: 6px 9px; border-radius: 6px; font-size: 12px; white-space: pre; display: none; z-index: 5; }
+  .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--muted); }
+  .controls input[type=range] { width: 160px; }
+  .lane-label { font-size: 11px; fill: var(--muted); }
+  #err { color: var(--ins); white-space: pre-wrap; }
+  #detail { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); min-height: 1.4em; }
+  .status { color: var(--muted); }
+  kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 12px; background: var(--hover); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MLign</h1>
+  <span class="sub">score ↔ performance alignment · test page</span>
+  <span class="sub" id="model"></span>
+</header>
+<main>
+  <div class="card row">
+    <label class="file"><input type="file" id="score" accept=".mei,.musicxml,.xml,.mxl"><span>Score (MEI / MusicXML)</span><span class="name" id="scoreName">—</span></label>
+    <label class="file"><input type="file" id="perf" accept=".mid,.midi"><span>Performance (MIDI)</span><span class="name" id="perfName">—</span></label>
+    <button id="go" disabled>Align</button>
+    <button id="dl" class="secondary" disabled>Download JSON</button>
+    <button id="demo" class="secondary" title="Schubert D783/15, Vienna 4x22 pianist 1">Load demo pair</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content: space-between">
+      <div class="stats" id="stats"></div>
+      <div class="legend">
+        <span><i style="background:var(--match)"></i>match</span>
+        <span><i style="background:var(--ins)"></i>insertion (perf only)</span>
+        <span><i style="background:var(--del)"></i>deletion (score only)</span>
+        <span><i style="background:var(--sub)"></i>wrong pitch</span>
+      </div>
+    </div>
+    <div class="controls" style="margin-top:8px">
+      <span>min confidence <input type="range" id="conf" min="0" max="1" step="0.01" value="0"> <span id="confv">0.00</span></span>
+      <span>zoom <input type="range" id="zoom" min="1" max="12" step="0.1" value="1"></span>
+      <label><input type="checkbox" id="showLines" checked> match lines</label>
+      <span>drag to pan · wheel to zoom · hover for details · click a note to pin</span>
+    </div>
+    <div id="viz"><svg id="svg"></svg><div id="tip"></div></div>
+    <div id="detail" style="margin-top:8px"></div>
+    <div id="err"></div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const svg = $('svg'), tip = $('tip');
+  let data = null, view = { zoom: 1, pan: 0 }, pinned = null;
+
+  fetch('/health').then(r => r.json()).then(j => { $('model').textContent = '· model ' + (j.checkpoint || '').split('/').pop(); }).catch(() => {});
+
+  const files = { score: null, perf: null };
+  const refresh = () => { $('go').disabled = !(files.score && files.perf); };
+  $('score').onchange = e => { files.score = e.target.files[0]; $('scoreName').textContent = files.score?.name || '—'; refresh(); };
+  $('perf').onchange  = e => { files.perf  = e.target.files[0]; $('perfName').textContent  = files.perf?.name  || '—'; refresh(); };
+
+  $('go').onclick = async () => {
+    $('err').textContent = ''; $('status').textContent = 'aligning…'; $('go').disabled = true;
+    const fd = new FormData(); fd.append('score', files.score); fd.append('performance', files.perf);
+    try {
+      const r = await fetch('/align', { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+      data = j; pinned = null; view = { zoom: 1, pan: 0 };
+      const s = j.stats;
+      $('stats').innerHTML = `<span><b>${s.matches}</b> matches</span><span><b>${s.insertions}</b> insertions</span><span><b>${s.deletions}</b> deletions</span><span>score <b>${j.score.length}</b> · perf <b>${j.perf.length}</b> notes</span><span>${s.seconds}s</span>`;
+      $('status').textContent = ''; $('dl').disabled = false;
+      draw();
+    } catch (e) { $('err').textContent = 'Error: ' + e.message; $('status').textContent = ''; }
+    $('go').disabled = false;
+  };
+  $('demo').onclick = async () => {
+    $('status').textContent = 'loading demo…';
+    const [sx, px] = await Promise.all([fetch('/demo/schubert_d783_15.musicxml'), fetch('/demo/schubert_d783_15_p01.mid')]);
+    files.score = new File([await sx.blob()], 'schubert_d783_15.musicxml');
+    files.perf  = new File([await px.blob()], 'schubert_d783_15_p01.mid');
+    $('scoreName').textContent = files.score.name; $('perfName').textContent = files.perf.name; refresh();
+    $('status').textContent = ''; $('go').click();
+  };
+  $('dl').onclick = () => {
+    const blob = new Blob([JSON.stringify(data.alignment, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'alignment.json'; a.click();
+  };
+  $('conf').oninput = e => { $('confv').textContent = (+e.target.value).toFixed(2); draw(); };
+  $('zoom').oninput = e => { view.zoom = +e.target.value; draw(); };
+  $('showLines').onchange = draw;
+
+  // ---- geometry: two lanes. Score lane on top (x = quarters), perf lane below (x = seconds).
+  // Each lane maps its own extent onto the full width; match lines connect the two.
+  const H = 620, PAD = 44, LANE = 250, GAP = 60, LEFT = 40, RIGHT = 12;
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (n, a = {}) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  function draw() {
+    svg.innerHTML = '';
+    if (!data) { const t = el('text', { x: 20, y: 40, class: 'lane-label' }); t.textContent = 'Upload a score and a MIDI performance, then Align.'; svg.appendChild(t); return; }
+    const W = svg.clientWidth || 1200;
+    const minConf = +$('conf').value;
+    const sc = data.score, pf = data.perf;
+    const sMin = Math.min(0, ...sc.map(n => n.onset)), pMin = Math.min(0, ...pf.map(n => n.onset));
+    const sMax = Math.max(...sc.map(n => n.onset + n.duration), 1) - sMin;
+    const pMax = Math.max(...pf.map(n => n.onset + n.duration), 1) - pMin;
+    const usable = (W - LEFT - RIGHT) * view.zoom;
+    const sx = q => LEFT + view.pan + (q - sMin) / sMax * usable;
+    const px = t => LEFT + view.pan + (t - pMin) / pMax * usable;
+    const pitches = sc.map(n => n.pitch).concat(pf.map(n => n.pitch));
+    const pLo = Math.min(...pitches) - 1, pHi = Math.max(...pitches) + 1;
+    const yIn = (p, top) => top + (pHi - p) / (pHi - pLo) * LANE;
+    const sTop = PAD, pTop = PAD + LANE + GAP;
+    const NH = Math.max(2, LANE / (pHi - pLo) - 0.6);
+
+    // lane frames + labels
+    for (const [top, label] of [[sTop, 'SCORE (quarters)'], [pTop, 'PERFORMANCE (seconds)']]) {
+      svg.appendChild(el('rect', { x: LEFT, y: top, width: W - LEFT - RIGHT, height: LANE, fill: '#fafafa', stroke: '#e5e7eb' }));
+      const t = el('text', { x: LEFT, y: top - 8, class: 'lane-label' }); t.textContent = label; svg.appendChild(t);
+    }
+    // clip region for panning content
+    const defs = el('defs'); const clip = el('clipPath', { id: 'clip' });
+    clip.appendChild(el('rect', { x: LEFT, y: 0, width: W - LEFT - RIGHT, height: H })); defs.appendChild(clip); svg.appendChild(defs);
+    const g = el('g', { 'clip-path': 'url(#clip)' }); svg.appendChild(g);
+
+    // index alignment
+    const sById = Object.fromEntries(sc.map(n => [n.id, n]));
+    const pById = Object.fromEntries(pf.map(n => [n.id, n]));
+    const labelS = {}, labelP = {}, matchOf = {};
+    for (const a of data.alignment) {
+      if (a.label === 'match') { labelS[a.score_id] = a; labelP[a.perf_id] = a; matchOf[a.score_id] = a.perf_id; }
+      else if (a.label === 'deletion') labelS[a.score_id] = a;
+      else if (a.label === 'insertion') labelP[a.perf_id] = a;
+    }
+    const color = a => !a ? '#9ca3af' : a.label === 'insertion' ? 'var(--ins)' : a.label === 'deletion' ? 'var(--del)' : (a.sub ? 'var(--sub)' : 'var(--match)');
+    const passes = a => !a || a.confidence == null || a.confidence >= minConf;
+
+    // match lines first (under notes)
+    if ($('showLines').checked) {
+      for (const a of data.alignment) {
+        if (a.label !== 'match' || !passes(a)) continue;
+        const s = sById[a.score_id], p = pById[a.perf_id]; if (!s || !p) continue;
+        const x1 = sx(s.onset), y1 = yIn(s.pitch, sTop) + NH / 2, x2 = px(p.onset), y2 = yIn(p.pitch, pTop) + NH / 2;
+        const strong = pinned && (pinned === a.score_id || pinned === a.perf_id);
+        g.appendChild(el('line', { x1, y1, x2, y2, stroke: a.sub ? '#7c3aed' : '#2563eb', 'stroke-opacity': strong ? 0.9 : Math.max(0.06, 0.28 * (a.confidence ?? 1)), 'stroke-width': strong ? 1.6 : 0.7 }));
+      }
+    }
+    // notes
+    const noteRect = (n, top, isScore) => {
+      const a = isScore ? labelS[n.id] : labelP[n.id];
+      const x = isScore ? sx(n.onset) : px(n.onset);
+      const w = Math.max(1.5, (isScore ? n.duration / sMax : n.duration / pMax) * usable);
+      const r = el('rect', { x, y: yIn(n.pitch, top), width: w, height: NH, fill: color(a), 'fill-opacity': passes(a) ? 0.9 : 0.15, rx: 1 });
+      r.dataset.id = n.id; r.dataset.side = isScore ? 's' : 'p';
+      r.addEventListener('mousemove', ev => showTip(ev, n, a, isScore));
+      r.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+      r.addEventListener('click', () => { pinned = (pinned === n.id) ? null : (isScore ? n.id : (a && a.score_id) || n.id); showDetail(n, a, isScore); draw(); });
+      return r;
+    };
+    for (const n of sc) g.appendChild(noteRect(n, sTop, true));
+    for (const n of pf) g.appendChild(noteRect(n, pTop, false));
+
+    // time-warp curve (score onset → matched perf onset), drawn in the gap
+    const pts = data.alignment.filter(a => a.label === 'match' && sById[a.score_id] && pById[a.perf_id])
+      .map(a => [sById[a.score_id].onset, pById[a.perf_id].onset]).sort((u, v) => u[0] - v[0]);
+    if (pts.length > 1) {
+      const gy0 = sTop + LANE + 6, gy1 = pTop - 6;
+      const d = pts.map(([q, t], i) => (i ? 'L' : 'M') + (sx(q)).toFixed(1) + ',' + (gy0 + (gy1 - gy0) * ((t - pMin) / pMax)).toFixed(1)).join(' ');
+      g.appendChild(el('path', { d, fill: 'none', stroke: '#0f766e', 'stroke-width': 1, 'stroke-opacity': 0.55 }));
+      const t = el('text', { x: W - RIGHT - 4, y: gy0 + 10, class: 'lane-label', 'text-anchor': 'end' }); t.textContent = 'tempo curve: score time → performance time'; svg.appendChild(t);
+    }
+  }
+
+  function showTip(ev, n, a, isScore) {
+    const box = $('viz').getBoundingClientRect();
+    tip.style.left = (ev.clientX - box.left + 12) + 'px'; tip.style.top = (ev.clientY - box.top + 12) + 'px';
+    const side = isScore ? 'score' : 'perf';
+    const t = isScore ? `${n.onset.toFixed(3)} q, dur ${n.duration.toFixed(3)} q, voice ${n.voice}` : `${n.onset.toFixed(3)} s, dur ${n.duration.toFixed(3)} s, vel ${n.velocity}`;
+    let lab = a ? a.label + (a.confidence != null ? ` (conf ${a.confidence.toFixed(3)})` : '') : 'unlabelled';
+    if (a && a.label === 'match') lab += isScore ? ` → perf ${a.perf_id}` : ` ← score ${a.score_id}`;
+    if (a && a.sub) lab += `  wrong pitch ${a.sub.from}→${a.sub.to}`;
+    tip.textContent = `${side} ${n.id}  pitch ${n.pitch}\n${t}\n${lab}`; tip.style.display = 'block';
+  }
+  function showDetail(n, a, isScore) {
+    $('detail').textContent = JSON.stringify(a || { note: n.id, label: 'unlabelled' });
+  }
+
+  // pan/zoom
+  let dragging = null;
+  svg.addEventListener('mousedown', e => { dragging = { x: e.clientX, pan: view.pan }; });
+  window.addEventListener('mouseup', () => { dragging = null; });
+  window.addEventListener('mousemove', e => { if (!dragging) return; view.pan = dragging.pan + (e.clientX - dragging.x); draw(); });
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const W = svg.clientWidth || 1200, mx = e.offsetX - LEFT;
+    const f = Math.exp(-e.deltaY * 0.0015), nz = Math.min(40, Math.max(1, view.zoom * f));
+    view.pan = mx - (mx - view.pan) * (nz / view.zoom); view.zoom = nz; $('zoom').value = Math.min(12, nz); draw();
+  }, { passive: false });
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
+</body>
+</html>
