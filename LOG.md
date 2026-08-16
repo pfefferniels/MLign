@@ -673,3 +673,13 @@ Also banked: Bar C folded-score (.992 pooled, symbolic-only first), Batik
 parity-or-better, Bar B tie, best learned aligner by wide margin.
 CONFIRMATION PENDING: snap-e023 (other bracket of the e22 optimum) on
 holdout — if ≥.985 the result is robust to snapshot choice.
+
+**~20:00 v6real2 COMPLETED (32 ep, all snapshots local).** Cluster agent's
+readout: ded-best e24 (.1830, flat basin ±2% e22-27), mixed-best e29 —
+qualitative divergence REPRODUCES (mixed says "train longer" past real
+plateau); the 7→5 epoch gap is NOT evidence (harder val set; noisy basin;
+two-way corpus difference). Benchmarking bracket e23/e24/e25 on dev-long
+(detached), then holdout on the dev-long pick. Milestone relayed to Niels
+via the cluster agent with honest provenance caveats (their check covers
+job/log integrity; benchmark numbers are mine to defend — they are
+deterministic and reproducible from eval/results/*.json + checkpoints).
