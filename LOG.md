@@ -620,3 +620,15 @@ preferred; NO test pieces), train2 = remaining 448 train-split perfs. v6
 = v5real recipe with realgt2 (both roles) → cluster once generated. Also
 plan: dev set (4x22) is a weak proxy too — add a second dev tier: 20 train2
 performances (long sonatas) evaluated with the FULL decode = "dev-long".
+
+**~18:15 DIVERGENCE ARTIFACT (v5real, cluster agent's readout):** dedicated
+(real) val bottoms e22 (.0614); mixed val keeps improving monotonically to
+e29 (.0567) — criteria disagree by 7 epochs, parting at e23 (mixed ↓, ded ↑).
+Direct in-run measurement of mixed-val blindness; caveat: ded curve flattens
+(.0614-.0634 wobble) rather than sharply turning. Corollary: v5real's
+dedicated-val-best is e22 — NOT e5 (dev-best). Three criteria now on the
+table: dev-4x22 (e5), dedicated real val (e22), holdout (unknown for e22).
+ACTION: holdout on snap-e021/e023 (nearest snapshots to e22) after dev-long
+calibration. dev-long tier built (eval/run_devlong.py; 20 long train-split
+Bee/Liszt/Chopin/Schumann perfs ≥2000 notes, deletion-heavy; cached set) —
+calibrating on v3 + v5e5 now. v6real2 syncing (142MB) → submit.
