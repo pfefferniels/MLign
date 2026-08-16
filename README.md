@@ -25,6 +25,22 @@ espressivo (xml:ids preserved); MusicXML with partitura. The released model
 `models/mlign-v1.pt` (6 MB, 1.5M params) is the default; `--engine baseline`
 runs the classical DTW fallback.
 
+## Browser test page
+
+```bash
+PYTHONPATH=src .venv/bin/python -m mlign.serve          # → http://127.0.0.1:8765/
+```
+
+Upload a score (MEI or MusicXML) and a MIDI performance — or click **Load demo
+pair** — and get an interactive two-lane piano-roll view: score above,
+performance below, match lines between them, deletions/insertions/wrong pitches
+colour-coded, a confidence filter, pan/zoom, per-note tooltips, the inferred
+tempo curve, and JSON download. Everything runs locally; the page is a single
+dependency-free HTML file (`web/index.html`) talking to a stdlib HTTP server
+(`src/mlign/serve.py`).
+
+![test page](docs/testpage.png)
+
 ## What's here
 
 | path | what |
@@ -52,6 +68,16 @@ real ground-truth windows) and ~53% synthetic performances rendered by espressiv
 with exact provenance (ornaments, exaggeration curriculum, error/restart/skip
 layer). Checkpoints are selected on a real-music validation loss — the single
 most important choice; see RESULTS §5.
+
+## Local-path caveats
+
+This is a research repository. Three integrations import sibling repositories by
+absolute path and will need adjusting on another machine: the espressivo
+renderer (`/Users/nielspfeffer/Projects/meico-ts/dist`, used for MEI parsing in
+the CLI/server and for corpus generation), the mpmify score/MPM samplers
+(`scripts/corpus/generate.mjs`), and TheGlueNote's preprocessed Vienna 4x22
+`.npz` files (`eval/run_4x22.py`). MusicXML input and the released model need
+none of them: `partitura` + `torch` suffice.
 
 ## Reproducing
 
