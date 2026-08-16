@@ -695,3 +695,11 @@ e23/24/25 of v6real2 evaluating on dev-long (detached).
 UNKNOWN → THROTTLE. Mode: no subagents, single niced local evals, cycles
 ≥1h, STATE.md carries the budget line. Fits the phase: headline banked,
 remaining work incremental.
+
+**~21:45 PUBLISHED: https://github.com/pfefferniels/MLign (public, 134 commits,
+MIT).** Shipped browser test page: web/index.html + `mlign serve` (stdlib
+HTTP; POST /align multipart MEI|MusicXML + MIDI → JSON) — two-lane piano-roll
+with match lines, ins/del/wrong-pitch colours, confidence filter, pan/zoom,
+tooltips, tempo curve, JSON download, bundled Vienna-4x22 demo pair. Verified
+headless (Chrome via playwright): 647 rects / 314 lines / 0 JS errors; MEI
+path yields real xml:ids. Screenshot in README (docs/testpage.png).
