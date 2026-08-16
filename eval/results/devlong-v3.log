@@ -1,0 +1,30 @@
+Beethoven/Piano_Sonatas/29-4/ChowK05M (n=8500, del 0.15): F 0.8849
+Beethoven/Piano_Sonatas/17-1_no_repeat/Nedayvoda01 (n=2876, del 0.12): F 0.9591
+Beethoven/Piano_Sonatas/21-3/Sekino05M (n=7687, del 0.09): F 0.9426
+Beethoven/Piano_Sonatas/17-3/USHIKI05M (n=4604, del 0.08): F 0.9681
+Beethoven/Piano_Sonatas/17-1_no_repeat/Song01 (n=2876, del 0.07): F 0.9667
+Beethoven/Piano_Sonatas/21-3/KimSY04M (n=7687, del 0.07): F 0.9345
+Beethoven/Piano_Sonatas/22-1/IVLEVA01 (n=3064, del 0.06): F 0.9825
+Beethoven/Piano_Sonatas/26-1/Ali02 (n=3351, del 0.06): F 0.9864
+Beethoven/Piano_Sonatas/24-1_no_2_repeat/Cui06M (n=2832, del 0.06): F 0.9925
+Liszt/Transcendental_Etudes/5/WangY02M (n=4548, del 0.16): F 0.9639
+Liszt/Gran_Etudes_de_Paganini/2_La_campanella/Ali03 (n=4328, del 0.15): F 0.8981
+Liszt/Gran_Etudes_de_Paganini/2_La_campanella/SEBAST02 (n=4328, del 0.15): F 0.9152
+Liszt/Ballade_2/KIM_J04 (n=7308, del 0.13): F 0.9648
+Liszt/Transcendental_Etudes/5/Park03M (n=4548, del 0.11): F 0.9558
+Chopin/Etudes_op_25/1/TongB02M (n=2232, del 0.14): F 0.9589
+Chopin/Sonata_3/3rd/mikahailoff01 (n=2044, del 0.13): F 0.9509
+Chopin/Sonata_3/3rd/GarritsonL10 (n=2044, del 0.12): F 0.9530
+Chopin/Etudes_op_25/1/TuanS04M (n=2232, del 0.12): F 0.9423
+Schumann/Arabeske/ParkS15M (n=2926, del 0.14): F 0.9533
+Schumann/Arabeske/Min09M (n=2926, del 0.14): F 0.9587
+{
+  "match_f": 0.9516069149227832,
+  "match_p": 0.9506668656133825,
+  "match_r": 0.9526108082940642,
+  "insertion_f": 0.8618213647518649,
+  "deletion_f": 0.7611157136384017,
+  "n": 20,
+  "aligner": "model:runs/v3/best.pt",
+  "seconds": 963.5
+}

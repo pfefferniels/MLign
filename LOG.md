@@ -639,3 +639,8 @@ val set (representative) AND real-GT train contribution (6,284 → 3,826 rows;
 train corpus 105,245 → 102,910). Attribution between the two = future
 ablation if needed. Open question v6 answers: does the 7-epoch ded/mix
 divergence narrow with a representative val set?
+**~18:40 dev-long CALIBRATED as valid proxy:** v3 .9516 > v5e5 .9493 (holdout
+agrees: .9833 > .9799; 4x22 said opposite .9964 < .9975). It sees the regime
+4x22 is blind to. Checkpoint selection = dev-long primary, 4x22 secondary.
+Note: dev-long is HARD (.95 range) — long deletion-heavy movements; matches
+holdout worst-quartile behaviour. e021 holdout running.
