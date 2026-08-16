@@ -703,3 +703,10 @@ with match lines, ins/del/wrong-pitch colours, confidence filter, pan/zoom,
 tooltips, tempo curve, JSON download, bundled Vienna-4x22 demo pair. Verified
 headless (Chrome via playwright): 647 rects / 314 lines / 0 JS errors; MEI
 path yields real xml:ids. Screenshot in README (docs/testpage.png).
+
+**~22:00 HALT (credits calibrated: RED, week 22% at 11% elapsed; mlign=low →
+resume at GREEN).** Parked cleanly. Last finding before halt: v6real2-e023
+dev-long **0.9573** — best ever (v3 .9516) → the representative-val run fixed
+the long-sonata regime; holdout on the dev-long best of e023-025 is the FIRST
+action at GREEN (could beat mlign-v1's .9878). Two niced local dev-long evals
+(e024/e025) finish on their own. STATE.md fully rewritten; repo pushed.
