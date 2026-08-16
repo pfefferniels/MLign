@@ -632,3 +632,10 @@ ACTION: holdout on snap-e021/e023 (nearest snapshots to e22) after dev-long
 calibration. dev-long tier built (eval/run_devlong.py; 20 long train-split
 Bee/Liszt/Chopin/Schumann perfs ≥2000 notes, deletion-heavy; cached set) —
 calibrating on v3 + v5e5 now. v6real2 syncing (142MB) → submit.
+**~18:30 v5real COMPLETED (32 ep, all 16 odd snapshots local); v6real2
+RUNNING (job 6334081, 4 gates pass; realgt-train absent ×0, realgt2-train
+×1).** Design caveat on record: v5real→v6real2 differ in TWO ways — the
+val set (representative) AND real-GT train contribution (6,284 → 3,826 rows;
+train corpus 105,245 → 102,910). Attribution between the two = future
+ablation if needed. Open question v6 answers: does the 7-epoch ded/mix
+divergence narrow with a representative val set?
