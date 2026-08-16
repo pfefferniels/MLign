@@ -3,7 +3,7 @@
  * espressivo PerformanceData value, with a typed edit log that doubles as
  * alignment ground truth.
  *
- * Shared-generator contract with the mpmify ML program (2026-08-09):
+ * Interface shared with the mpmify project:
  *   applyRobustness(data, config, seed) → { data, edits }
  * — a pure function; all randomness through the explicit seeded rng; every op
  * class behind a config flag (all off by default); edit ops typed

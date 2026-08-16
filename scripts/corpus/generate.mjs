@@ -1,7 +1,7 @@
 /**
  * Synthetic training-corpus generator v0.
  *
- * Composition per the shared-generator deal (research/00-coordination.md):
+ * Composition (the score/MPM samplers are shared with the mpmify project):
  *   score + MPM-map sampling — mpmify's modules (imported read-only);
  *   rendering               — espressivo facade (performMsmToData, once);
  *   robustness + GT         — our layer.

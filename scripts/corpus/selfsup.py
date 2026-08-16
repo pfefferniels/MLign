@@ -32,7 +32,7 @@ INS = -1  # insertion marker in origin array (original used 1e7 / 2e7)
 
 
 def piece_split(piece_dir: str) -> str:
-    """Deterministic piece-level split, journaled in DESIGN/LOG: md5 mod 10."""
+    """Deterministic piece-level split: md5(piece dir) mod 10 (<8 train, 8 val, 9 test)."""
     h = int(hashlib.md5(piece_dir.encode()).hexdigest(), 16) % 10
     return "train" if h < 8 else ("val" if h == 8 else "test")
 

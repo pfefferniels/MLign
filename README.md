@@ -1,91 +1,111 @@
-# MLign — symbolic score→performance alignment
+# MLign
 
-MEI (or MusicXML) score + performed MIDI → note-level alignment (matches,
-insertions, deletions, each with a confidence), learned end-to-end and trained
+Symbolic score→performance alignment: an MEI or MusicXML score plus a MIDI
+performance in, a note-level alignment out — every score note matched to a
+performed note or marked as not played, every performed note matched or marked
+as extra, each decision with a confidence. Learned end-to-end; trained largely
 on synthetic expressive performances with exact ground truth.
 
-**Status (2026-08-16):** on the untouched nASAP holdout (84 performances, MAESTRO-v2
-test pieces) MLign v1 scores **0.9878** match-F vs **0.9852** for DualDTW
-(parangonar's hand-tuned SOTA) — 65 wins / 17 losses per performance,
-p < 1e-7 — and is best on insertions and deletions too. Full tables, protocols
-and caveats: [`docs/RESULTS.md`](docs/RESULTS.md) (generated from
-`eval/results/*.json`).
+On the held-out nASAP test split (84 performances the model never saw in any
+form) MLign v1 reaches **0.9878** match-F against **0.9852** for DualDTW,
+the strongest published system, winning 65 of 84 performances (p < 10⁻⁷) and
+scoring best on insertions and deletions as well. Full tables and protocols:
+[`docs/RESULTS.md`](docs/RESULTS.md).
 
-## Quickstart
+## Standing on shoulders
+
+Nothing here starts from zero. The problem, the datasets, the metric and the
+baselines all come from the community that built symbolic alignment into a
+measurable field:
+
+- **Silvan Peter, Carlos Cancino-Chacón, Francesco Foscarin, Andrew McLeod,
+  Florian Henkel, Emmanouil Karystinaios and Gerhard Widmer** produced the
+  note-level ASAP alignments and the evaluation protocol we adopt unchanged
+  (*Automatic Note-Level Score-to-Performance Alignments in the ASAP Dataset*,
+  TISMIR 2023), and ship the reference systems in
+  [parangonar](https://github.com/sildater/parangonar) — DualDTW (Peter, ISMIR
+  2023) is the bar we measure against, and its two-phase design (a robust
+  monotone time map first, per-pitch note assignment second) is one we kept.
+- **Peter & Widmer**'s [TheGlueNote](https://github.com/sildater/thegluenote)
+  (ISMIR 2024) showed that a transformer can learn note matching from
+  self-supervised corruptions of raw MIDI, and introduced the dustbin
+  formulation for insertions and deletions. Our self-supervised data source is
+  a port of their `reorder()` augmentation.
+- **Eita Nakamura, Kazuyoshi Yoshii and Haruhiro Katayose**'s HMM aligner
+  (ISMIR 2017) remains the standing classical baseline and the source of the
+  heavy-tailed timing model and skip transitions that structured decoding
+  still needs.
+- **Peter, Hu & Widmer**, *How to Infer Repeat Structures in MIDI Performances*
+  (2025): the idea that repeat structure is best solved as preprocessing —
+  rank candidate unfoldings, then align — is theirs; we reimplement it.
+- Datasets: **ASAP** (Foscarin, McLeod, Rigaux, Jacquemard, Sakai, ISMIR 2020),
+  the **Vienna 4x22 Piano Corpus** (Werner Goebl, 1999) and
+  **Batik-plays-Mozart** (Patricia Hu & Gerhard Widmer, ISMIR 2023).
+- From computer vision: the per-point matchability head of **LightGlue**
+  (Lindenberger, Sarlin, Pollefeys, ICCV 2023) replaces a single learned
+  dustbin token.
+
+## What we do differently
+
+1. **Exact synthetic supervision instead of mechanical corruption.**
+   Performances are rendered from scores by
+   [espressivo](https://github.com/pfefferniels/espressivo) (the TypeScript
+   port of meico) with MPM performance instructions — rubato, asynchrony,
+   articulation, dynamics, arpeggios, generated ornaments (trills, mordents,
+   turns), a parametric expressivity curriculum — and each rendered note carries
+   the score note's `xml:id`. On top sits a performer-error layer (wrong notes,
+   slips, restarts, skipped passages) that logs its edits as ground truth. This
+   is supervision no corruption of MIDI can produce: musically plausible
+   expression with perfect labels, including one-to-many ornament realizations.
+2. **Real music decides which checkpoint ships.** Training mixes ~47 % real
+   material (self-supervised windows and real ground-truth windows from the
+   nASAP training pieces) with the synthetic corpus, and — the single most
+   consequential choice — checkpoints are selected on a real-music validation
+   loss. Selection on the mixed synthetic validation set picks a checkpoint
+   seven epochs too late; a popular dev benchmark picks one that loses on the
+   test set. `docs/RESULTS.md` §5 shows the divergence measured in-run.
+3. **MEI-native, richer output.** Scores enter as MEI (via espressivo) so
+   alignments land directly on the edition's `xml:id`s; output records carry
+   confidence and can express wrong-pitch matches, and there is an export to
+   MEI's own performance module (`<performance>/<recording>/<when>`).
+4. **Repeats from symbols alone.** With the score folded to a single pass,
+   MLign infers the played structure and aligns at 0.996 match-F on the Vienna
+   4x22 repeat pieces — a condition where published symbolic systems score
+   below 0.37 (RUMAA, WASPAA 2025, Table 2; RUMAA itself reaches 98.4 pooled
+   F from audio).
+
+The model is small: 1.5 M parameters, four transformer layers over a single
+stream of score and performance note tokens with relative positions, a
+bilinear match head and per-note matchability. Decoding fuses a cluster-level
+DTW over pitch-set and model-confidence cost with the model's mutual anchors
+into a monotone time map, then assigns notes per pitch. Details:
+[`docs/DESIGN.md`](docs/DESIGN.md).
+
+## Use
 
 ```bash
-# python 3.13 venv with torch/numpy/partitura (see requirements-train.txt for the training subset)
-PYTHONPATH=src .venv/bin/python -m mlign.cli align score.musicxml performance.mid --format json
-PYTHONPATH=src .venv/bin/python -m mlign.cli align score.mei performance.mid --format match -o out.match
+# align (json | match | jsonl output); the released model is the default
+PYTHONPATH=src python -m mlign.cli align score.mei performance.mid --format match -o out.match
+
+# interactive test page at http://127.0.0.1:8765/
+PYTHONPATH=src python -m mlign.serve
 ```
-
-Formats: `json` (internal records with confidence), `match` (partitura/parangonar
-match file v1.0.0), `jsonl` (mpmify row-schema mirror). MEI input is parsed with
-espressivo (xml:ids preserved); MusicXML with partitura. The released model
-`models/mlign-v1.pt` (6 MB, 1.5M params) is the default; `--engine baseline`
-runs the classical DTW fallback.
-
-## Browser test page
-
-```bash
-PYTHONPATH=src .venv/bin/python -m mlign.serve          # → http://127.0.0.1:8765/
-```
-
-Upload a score (MEI or MusicXML) and a MIDI performance — or click **Load demo
-pair** — and get an interactive two-lane piano-roll view: score above,
-performance below, match lines between them, deletions/insertions/wrong pitches
-colour-coded, a confidence filter, pan/zoom, per-note tooltips, the inferred
-tempo curve, and JSON download. Everything runs locally; the page is a single
-dependency-free HTML file (`web/index.html`) talking to a stdlib HTTP server
-(`src/mlign/serve.py`).
 
 ![test page](docs/testpage.png)
 
-## What's here
+MusicXML input and the released model need only `torch`, `numpy` and
+`partitura`. MEI input needs a built espressivo (path in `src/mlign/cli.py`).
+Benchmarks (`eval/`) expect the ASAP, Vienna 4x22 and Batik datasets under
+`data/benchmarks/` and TheGlueNote's preprocessed 4x22 `.npz` files.
 
-| path | what |
-|---|---|
-| `src/mlign/` | model (`model.py`), inference + decode (`infer.py`), tables, CLI, MEI export, repeat inference |
-| `src/robustness/` | performer-error / restart / skip layer with typed edit log (= alignment GT); shared with mpmify |
-| `scripts/corpus/` | synthetic corpus generator (espressivo renders + ornaments + exaggeration + robustness), self-supervised real-MIDI corruption, real-GT windows |
-| `scripts/train.py` | trainer (resumable, atomic checkpoints, dedicated real-music validation, snapshots) |
-| `eval/` | nASAP / Vienna 4x22 / Batik harnesses, mismatch + folded-score benchmarks, dev-long tier, metrics (TISMIR-compatible, unit-tested) |
-| `docs/DESIGN.md` | architecture + decisions; `docs/RESULTS.md` all numbers; `LOG.md` the full journal |
-| `research/` | literature, local-codebase and espressivo studies; peer-agent coordination contracts |
-| `slurm/` | bwUniCluster H100 job script |
+## Layout
 
-## Method in one paragraph
+`src/mlign/` model, inference, CLI, server, MEI export, repeat inference ·
+`src/robustness/` performer-error layer with edit-log ground truth ·
+`scripts/corpus/` corpus generators (espressivo renders, self-supervised
+windows, real-GT windows) · `scripts/train.py` trainer · `eval/` benchmark
+harnesses and metrics · `slurm/` cluster job script · `models/mlign-v1.pt`
+the released model (= training run v5real, epoch 21).
 
-A single-stream transformer over `[score notes][performance notes]` (T5-style
-relative positions, per-note feature embeddings, dustbin/matchability heads)
-produces a match matrix; decoding builds a monotone time map from a cluster-DTW
-over blended pitch-set + model-confidence cost fused with mutual anchors, then
-assigns notes per pitch (rarest first, map rebuilt after round 1), with a
-same-pitch residual rescue. Repeats are handled as preprocessing (candidate
-unfoldings ranked by pitch-set local alignment + note-count prior). Training data
-is ~47% real music (self-supervised corruptions of nASAP train performances +
-real ground-truth windows) and ~53% synthetic performances rendered by espressivo
-with exact provenance (ornaments, exaggeration curriculum, error/restart/skip
-layer). Checkpoints are selected on a real-music validation loss — the single
-most important choice; see RESULTS §5.
-
-## Local-path caveats
-
-This is a research repository. Three integrations import sibling repositories by
-absolute path and will need adjusting on another machine: the espressivo
-renderer (`/Users/nielspfeffer/Projects/meico-ts/dist`, used for MEI parsing in
-the CLI/server and for corpus generation), the mpmify score/MPM samplers
-(`scripts/corpus/generate.mjs`), and TheGlueNote's preprocessed Vienna 4x22
-`.npz` files (`eval/run_4x22.py`). MusicXML input and the released model need
-none of them: `partitura` + `torch` suffice.
-
-## Reproducing
-
-Datasets (gitignored): `data/benchmarks/{asap-dataset,vienna4x22,batik_plays_mozart}`
-plus TheGlueNote's 4x22 `.npz` files. Evaluate the released model:
-
-```bash
-.venv/bin/python -W ignore eval/run_eval.py --aligner model:models/mlign-v1.pt --robust-only --split test
-.venv/bin/python -W ignore eval/run_4x22.py --ckpt models/mlign-v1.pt
-.venv/bin/python -W ignore eval/run_4x22_repeats.py --ckpt models/mlign-v1.pt
-```
+MIT. Built with the espressivo, mpmify and bwUniCluster teams; see
+`docs/RESULTS.md` for every number and how it was obtained.

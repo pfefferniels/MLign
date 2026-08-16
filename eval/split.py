@@ -3,7 +3,7 @@
 Computed locally: 74 performances / 39 piece folders whose
 maestro_midi_performance is in MAESTRO v2's test split. (Matchmaker reports
 43 pieces / 59 performances — likely a different nASAP version or extra
-filtering; our numbers are journaled and deterministic from the two CSVs.)
+filtering); the numbers here are deterministic from the two CSVs.
 
 Everything NOT in the test-piece folders is fair training material.
 """

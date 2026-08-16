@@ -79,7 +79,7 @@ export function editsToAlignment(editedData, edits) {
 }
 
 /**
- * Clock convention adapter (contract with the mpmify ML program, 2026-08-09):
+ * Clock convention adapter (interface shared with the mpmify project):
  * `editsToAlignment` emits ABSOLUTE facade milliseconds (lossless; never
  * negative, applyRobustness clamps the piece to ≥ 0). The mpmify JSONL
  * convention instead sets the first MATCHED note's onset to 0.0, with events

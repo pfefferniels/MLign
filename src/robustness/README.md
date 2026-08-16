@@ -1,8 +1,9 @@
 # Robustness layer
 
 Performer-error and structural perturbations over espressivo `PerformanceData`,
-with a typed edit log that doubles as alignment ground truth. Shared-generator
-contract with the mpmify ML program — see `research/00-coordination.md`.
+with a typed edit log that doubles as alignment ground truth. An
+interface shared with the mpmify project (pure function, explicit seeded rng,
+typed edit log).
 
 - `robustness.mjs` — `applyRobustness(data, config, seed)` → `{data, edits}`
 - `gt.mjs` — `editsToAlignment(data, edits)` → `{alignment, perfNotes, unattributed}`;

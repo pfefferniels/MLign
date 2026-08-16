@@ -3,7 +3,7 @@
  *
  * Everything the layer randomizes flows through one of these helpers so that a
  * (seed, config, input) triple always yields the identical output — the
- * shared-generator contract with the mpmify program (explicit seeded rng,
+ * interface shared with the mpmify project (explicit seeded rng,
  * never Math.random).
  */
 
