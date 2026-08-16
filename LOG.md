@@ -546,3 +546,13 @@ capacity/epochs. Next run: --val-corpus (real-only val split), 24-32 epochs,
 snapshots every 2 epochs. HPC agent (new socket 29262) continues arrangement.
 Note: v4h100 e5 dev checkpoint was overwritten before snapshotting started —
 regret; snapshot-from-epoch-0 next time.
+
+**~15:20 Refined verdict (paired tests, deterministic dev):** v3 > v4h100-e50
+significant (33W/40T/14L, p=.004); v3 vs v4small NOT distinguishable
+(25/40/22, p=.39) — different operating point (del +.039 / ins −.041). So:
+capacity overfits synthetic; more-data-same-size ≈ neutral; selection
+validity is the real gap. SHIPPED: --val-corpus dedicated selection set
+(strict logging + refusal on empty/<50), --snapshot-every; real-GT corpus
+source (scripts/corpus/real_gt.py: nASAP train-split GT windows, val/train
+piece-disjoint) — the first REAL supervised rows in the program (DESIGN §5C
+finally). Generating realgt-val + realgt-train now.
