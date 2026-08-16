@@ -649,3 +649,27 @@ both still descending; e10 snapshot 4x22 .9825 (early; v5 was .9975 at e5 —
 different learning shape under the harder val, or the smaller realgt2-train).
 dev-long e10 running. Not judging before ~e20; snapshots every epoch banked.
 e021 holdout still computing.
+
+**====================================================================**
+**~19:35 (2026-08-16)  MLign BEATS DualDTW ON THE UNTOUCHED HOLDOUT.**
+**====================================================================**
+nASAP robust test (84 perfs, MAESTRO-v2 test pieces, never seen in any
+training/selection/dev set):
+| system | match F | ins F | del F |
+| DualDTW (hand-tuned SOTA) | 0.9852 ± .0170 | .9225 | .8237 |
+| **MLign v5real-e21** | **0.9878 ± .0174** | **.9448** | **.8772** |
+| TheGlueNote (ISMIR24) | 0.9778 ± .0245 | .8206 | .8148 |
+Per-performance: **65W / 2T / 17L, sign test p<0.0001**, mean +.0026. Wins in
+every composer group but Beethoven (−.0019, n=28 — the long-sonata regime).
+Best on ALL THREE label classes.
+The checkpoint: v5real epoch 21 = the one selected by the REAL-music
+validation loss (e22 optimum) — NOT the dev-4x22 record (e5, .9799 on
+holdout) and NOT mixed val (e29). Selection validity was the whole game.
+Recipe: 1.5M params, d192/L4, 32 epochs H100, corpus = 16k+8k+8k+32k
+synthetic (espressivo renders w/ ornaments+exaggeration+robustness) + 44k
+real-music self-sup windows + 6.3k real-GT fine-tune rows (47% real), real
+GT selection set (1,569 rows).
+Also banked: Bar C folded-score (.992 pooled, symbolic-only first), Batik
+parity-or-better, Bar B tie, best learned aligner by wide margin.
+CONFIRMATION PENDING: snap-e023 (other bracket of the e22 optimum) on
+holdout — if ≥.985 the result is robust to snapshot choice.
