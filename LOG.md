@@ -644,3 +644,8 @@ agrees: .9833 > .9799; 4x22 said opposite .9964 < .9975). It sees the regime
 4x22 is blind to. Checkpoint selection = dev-long primary, 4x22 secondary.
 Note: dev-long is HARD (.95 range) — long deletion-heavy movements; matches
 holdout worst-quartile behaviour. e021 holdout running.
+**~19:10 v6real2 e11:** ded .2584 (harder set — deletion-heavy) vs mix .2030,
+both still descending; e10 snapshot 4x22 .9825 (early; v5 was .9975 at e5 —
+different learning shape under the harder val, or the smaller realgt2-train).
+dev-long e10 running. Not judging before ~e20; snapshots every epoch banked.
+e021 holdout still computing.
