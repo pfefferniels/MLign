@@ -691,3 +691,7 @@ lucky epoch. Result stands. Consolidating deliverable: models/mlign-v1.pt
 CLI defaults to it (E2E verified: 314 matches, conf .994 on D783), docs/RESULTS.md
 generated from JSON by scripts/make_results.py, README rewritten. Bracket
 e23/24/25 of v6real2 evaluating on dev-long (detached).
+**~21:10 Budget governance adopted** (verwaltung rule): credits reports
+UNKNOWN → THROTTLE. Mode: no subagents, single niced local evals, cycles
+≥1h, STATE.md carries the budget line. Fits the phase: headline banked,
+remaining work incremental.
