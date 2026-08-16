@@ -1,0 +1,362 @@
+{
+  "aggregate": {
+    "match_f": 0.9913509815037346,
+    "match_p": 0.9923159802228657,
+    "match_r": 0.9904000449585707,
+    "insertion_f": 0.6564961651675647,
+    "deletion_f": 0.8444315027848251,
+    "n": 87,
+    "aligner": "model:runs/v4h100/best.pt",
+    "seconds": 24.5
+  },
+  "rows": [
+    {
+      "file": "Chopin_op10_no3_p02.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p03.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p04.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p05.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p06.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p07.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p08.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p09.npz",
+      "match_f": 0.9977064220183486
+    },
+    {
+      "file": "Chopin_op10_no3_p10.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p11.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p12.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p13.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p14.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p15.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p16.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p17.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p18.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p19.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p20.npz",
+      "match_f": 0.9977628635346756
+    },
+    {
+      "file": "Chopin_op10_no3_p21.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op10_no3_p22.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Chopin_op38_p01.npz",
+      "match_f": 0.9785467128027682
+    },
+    {
+      "file": "Chopin_op38_p02.npz",
+      "match_f": 0.9923664122137404
+    },
+    {
+      "file": "Chopin_op38_p03.npz",
+      "match_f": 0.942240779401531
+    },
+    {
+      "file": "Chopin_op38_p04.npz",
+      "match_f": 0.9748953974895397
+    },
+    {
+      "file": "Chopin_op38_p05.npz",
+      "match_f": 0.9819694868238558
+    },
+    {
+      "file": "Chopin_op38_p06.npz",
+      "match_f": 0.9784572619874914
+    },
+    {
+      "file": "Chopin_op38_p07.npz",
+      "match_f": 0.9779005524861878
+    },
+    {
+      "file": "Chopin_op38_p08.npz",
+      "match_f": 0.9882677708764667
+    },
+    {
+      "file": "Chopin_op38_p09.npz",
+      "match_f": 0.9775910364145658
+    },
+    {
+      "file": "Chopin_op38_p10.npz",
+      "match_f": 0.9416666666666667
+    },
+    {
+      "file": "Chopin_op38_p11.npz",
+      "match_f": 0.9412587412587411
+    },
+    {
+      "file": "Chopin_op38_p12.npz",
+      "match_f": 0.9924398625429554
+    },
+    {
+      "file": "Chopin_op38_p13.npz",
+      "match_f": 0.929264909847434
+    },
+    {
+      "file": "Chopin_op38_p14.npz",
+      "match_f": 0.9799029799029799
+    },
+    {
+      "file": "Chopin_op38_p15.npz",
+      "match_f": 0.9778393351800555
+    },
+    {
+      "file": "Chopin_op38_p16.npz",
+      "match_f": 0.9737931034482759
+    },
+    {
+      "file": "Chopin_op38_p17.npz",
+      "match_f": 0.9806896551724138
+    },
+    {
+      "file": "Chopin_op38_p18.npz",
+      "match_f": 0.9185393258426965
+    },
+    {
+      "file": "Chopin_op38_p19.npz",
+      "match_f": 0.9924398625429554
+    },
+    {
+      "file": "Chopin_op38_p20.npz",
+      "match_f": 0.9798750867453156
+    },
+    {
+      "file": "Chopin_op38_p21.npz",
+      "match_f": 0.9752407152682255
+    },
+    {
+      "file": "Chopin_op38_p22.npz",
+      "match_f": 0.9818688981868898
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p01.npz",
+      "match_f": 0.997907949790795
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p02.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p03.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p04.npz",
+      "match_f": 0.9978991596638656
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p05.npz",
+      "match_f": 0.9916317991631799
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p06.npz",
+      "match_f": 0.99581589958159
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p07.npz",
+      "match_f": 0.9895615866388309
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p08.npz",
+      "match_f": 0.99581589958159
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p09.npz",
+      "match_f": 0.9979035639412998
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p10.npz",
+      "match_f": 0.9937106918238994
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p11.npz",
+      "match_f": 0.9978858350951374
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p12.npz",
+      "match_f": 0.997907949790795
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p13.npz",
+      "match_f": 0.9936974789915967
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p14.npz",
+      "match_f": 0.9936708860759493
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p15.npz",
+      "match_f": 0.9874213836477987
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p16.npz",
+      "match_f": 0.997907949790795
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p17.npz",
+      "match_f": 0.997907949790795
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p18.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p19.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p20.npz",
+      "match_f": 0.997907949790795
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p21.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Mozart_K331_1st-mov_p22.npz",
+      "match_f": 0.9937238493723849
+    },
+    {
+      "file": "Schubert_D783_no15_p01.npz",
+      "match_f": 0.9952153110047847
+    },
+    {
+      "file": "Schubert_D783_no15_p02.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p03.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p04.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p05.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p06.npz",
+      "match_f": 0.9984544049459042
+    },
+    {
+      "file": "Schubert_D783_no15_p07.npz",
+      "match_f": 0.9969135802469136
+    },
+    {
+      "file": "Schubert_D783_no15_p08.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p09.npz",
+      "match_f": 0.9969418960244648
+    },
+    {
+      "file": "Schubert_D783_no15_p10.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p11.npz",
+      "match_f": 0.9984301412872841
+    },
+    {
+      "file": "Schubert_D783_no15_p12.npz",
+      "match_f": 0.9969325153374233
+    },
+    {
+      "file": "Schubert_D783_no15_p13.npz",
+      "match_f": 0.9969418960244648
+    },
+    {
+      "file": "Schubert_D783_no15_p14.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p15.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p16.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p17.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p18.npz",
+      "match_f": 0.9969040247678018
+    },
+    {
+      "file": "Schubert_D783_no15_p19.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p20.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p21.npz",
+      "match_f": 1.0
+    },
+    {
+      "file": "Schubert_D783_no15_p22.npz",
+      "match_f": 1.0
+    }
+  ]
+}

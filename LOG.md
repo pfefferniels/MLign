@@ -530,3 +530,19 @@ early-epoch bias. The night decides via snapshots.
 persists mid-schedule; bet is on late-cosine re-generalization (e60+),
 else v3-e23 stays champion and the scaled lesson = "capacity needs more real
 data, not more epochs." e29 val .9877.
+
+**2026-08-16 ~14:40 (after multi-day machine sleep) — SCALED RUN VERDICT.**
+Both cluster jobs completed (v4h100 10h10m, v4small 6h25m). Full-87 dev:
+| ckpt | clean | ins | del |
+| v3-e23 (1.5M, 43k rows) | .9964 | .731 | .822 | ← still champion
+| v4h100 best (e50, 6.3M, 99k) | .9947 | .690 | .813 |
+| v4h100 last (e95) | .9936 | .661 | .798 |
+| v4small best (1.5M, 99k) | .9945 | .690 | .861 |
+Real-music transfer PEAKED at v4h100 e5-e10 (.9960-.9962), then overfit
+the synthetic mix; cluster val (5% of same mix) blind to it — loss and acc
+both select wrongly. Scale ablation: v4small on 99k ≠ better than v3 on 43k
+→ binding constraint = real-music share + REAL dev-proxy early stopping, not
+capacity/epochs. Next run: --val-corpus (real-only val split), 24-32 epochs,
+snapshots every 2 epochs. HPC agent (new socket 29262) continues arrangement.
+Note: v4h100 e5 dev checkpoint was overwritten before snapshotting started —
+regret; snapshot-from-epoch-0 next time.
