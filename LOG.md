@@ -579,3 +579,8 @@ note near a matched score note of same pitch = ornament neighbor, not
 insertion). Latter = next decode iteration. Cluster agent notes: snapshot
 resolution 2 epochs may straddle a sharp early peak → --snapshot-every 1
 follow-up if the curve is peaky. stgall joins cluster; no contention.
+**~15:45 v5real e0:** 256.6 s/epoch (est. held); val (real) 1.2258 vs val_mix
+1.1476 — already 0.078 apart at e0. Dual-criterion logging makes this run a
+DIRECT MEASUREMENT of the mixed-val blindness: the divergence epoch (real loss
+rising while mixed still falls) will be an artifact in its own right for the
+write-up. Cluster agent flags it when it appears.
