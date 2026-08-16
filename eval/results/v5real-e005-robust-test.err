@@ -1,0 +1,13 @@
+...50/84 (1287s)
+{
+  "match_f": 0.9798538733215212,
+  "match_p": 0.979984609452278,
+  "match_r": 0.9797259778000974,
+  "insertion_f": 0.9261142730562539,
+  "deletion_f": 0.7679507898949022,
+  "n": 84,
+  "failures": 0,
+  "aligner": "model:runs/v5real/snap-e005.pt",
+  "seconds": 2481.8
+}
+wrote eval/results/v5real-e005-robust-test.json

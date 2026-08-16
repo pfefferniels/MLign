@@ -590,3 +590,22 @@ write-up. Cluster agent flags it when it appears.
 ever) / mismatch .9695 (≈). Five epochs, 1.5M params, 47% real data + real GT
 selection — the recipe works. HOLDOUT RE-MATCH FIRED with snap-e005 (bar
 DualDTW .9852; prev MLign best .9833). Later snapshots (e007+) queued for dev.
+
+**~17:00 HOLDOUT VERDICT v5real-e5: 0.9799 — REGRESSION vs v3 (.9833) despite
+dev record.** 20W/4T/60L vs DualDTW; ins .926 (best ever) but del .768.
+Regressions concentrate: Beethoven sonatas (n=28, −.0056), Liszt (−.0057),
+Schumann Toccata (−.015); Bach IMPROVED (+.0035). Worst: Beethoven 16-2
+(5041 notes, 513 GT deletions — a performance that skips ~10% of the score):
+false matches 482→742, spread through the whole piece. Bach preludes (the
+old losses) fixed; long/dense/skip-heavy repertoire broke.
+DIAGNOSIS: dev (4x22 = 4 short pieces ≤1000 notes) and realgt-val (Chopin/
+Schubert/Haydn-heavy) both under-represent long dense sonata movements with
+massive deletions — the model got better at what dev+val see and worse at
+what they don't. Selection validity improved but the SELECTION SET is
+still not representative. Two levers: (a) rebalance realgt-val toward the
+holdout's composer mix (Beethoven/Liszt/Schumann/Bach — WITHOUT using test
+pieces; train-split has 1983 Beethoven rows so it's available); (b) the
+windowed-inference path: 5041-note pieces run through coarse_windows —
+window-stitching may itself be the failure surface for long pieces
+(v3 also scores only .893 there). Next: (b) first — instrument window
+boundaries on 16-2; then (a) for v6.
