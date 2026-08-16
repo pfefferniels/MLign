@@ -15,6 +15,8 @@ import sys
 import time
 from pathlib import Path
 
+import os
+
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,6 +24,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mlign.dataset import CorpusBatcher, collate, load_corpus  # noqa: E402
 from mlign.model import ModelConfig, NoteAligner, alignment_loss  # noqa: E402
+
+
+def atomic_save(obj, path: Path) -> None:
+    """torch.save to a temp file then os.replace — rename is atomic on one
+    filesystem, so a concurrent rsync/reader can only ever see complete files."""
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    torch.save(obj, tmp)
+    os.replace(tmp, path)
 
 
 def main() -> None:
@@ -169,14 +179,14 @@ def main() -> None:
             "best_val": best_val,
             "config": vars(args),
         }
-        torch.save(state, last)
+        atomic_save(state, last)
         if val_loss < best_val:
             best_val = val_loss
             state["best_val"] = best_val
-            torch.save(state, run_dir / "best.pt")
+            atomic_save(state, run_dir / "best.pt")
         if args.snapshot_every and (epoch + 1) % args.snapshot_every == 0:
-            torch.save({"model": model.state_dict(), "epoch": epoch, "config": vars(args)},
-                       run_dir / f"snap-e{epoch}.pt")
+            atomic_save({"model": model.state_dict(), "epoch": epoch, "config": vars(args)},
+                        run_dir / f"snap-e{epoch:03d}.pt")
 
 
 if __name__ == "__main__":
