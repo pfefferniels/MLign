@@ -31,6 +31,14 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--max-tokens", type=int, default=6000)
     ap.add_argument("--val-frac", type=float, default=0.05)
+    ap.add_argument("--val-corpus", default="",
+                    help="comma-separated globs for a DEDICATED validation set "
+                         "(e.g. real-music windows). When set, checkpoint selection "
+                         "uses ONLY these rows (the mixed-corpus val is still logged as "
+                         "val_mix_*). Rows in --val-corpus are excluded from training if "
+                         "they also appear in --corpus.")
+    ap.add_argument("--snapshot-every", type=int, default=0,
+                    help="also save runs/<name>/snap-e<N>.pt every N epochs (0 = off)")
     ap.add_argument("--run", default="runs/v0")
     ap.add_argument("--d-model", type=int, default=192)
     ap.add_argument("--n-layers", type=int, default=4)
@@ -55,16 +63,35 @@ def main() -> None:
     log_path = run_dir / "log.jsonl"
 
     paths = sorted({p for g in args.corpus.split(",") for p in glob.glob(g.strip())})
-    rows = load_corpus(paths)
+    dedicated_paths = sorted({p for g in args.val_corpus.split(",") if g.strip() for p in glob.glob(g.strip())}) if args.val_corpus else []
+    train_paths = [p for p in paths if p not in set(dedicated_paths)]
+    rows = load_corpus(train_paths)
     rng = torch.Generator().manual_seed(0)
     perm = torch.randperm(len(rows), generator=rng).tolist()
     n_val = max(1, int(len(rows) * args.val_frac))
     val_rows = [rows[i] for i in perm[:n_val]]
     train_rows = [rows[i] for i in perm[n_val:]]
-    print(f"corpus: {len(train_rows)} train / {len(val_rows)} val pieces; device={device}", flush=True)
+    sel_rows = load_corpus(dedicated_paths) if dedicated_paths else None
+    print(
+        f"corpus: {len(train_rows)} train / {len(val_rows)} val-mix"
+        + (f" / {len(sel_rows)} val-dedicated (SELECTION)" if sel_rows else "")
+        + f" pieces; device={device}; staged {len(train_paths)} train files",
+        flush=True,
+    )
+    for p in train_paths:
+        print(f"  train file: {p}", flush=True)
+    if dedicated_paths:
+        for p in dedicated_paths:
+            print(f"  VAL-DEDICATED file: {p}", flush=True)
+        print(f"  selection criterion: dedicated val ({len(sel_rows)} rows) — NOT the mixed split", flush=True)
+        if len(sel_rows) < 50:
+            raise SystemExit("--val-corpus resolved to <50 rows — refusing to run with a degenerate selection set")
+    elif args.val_corpus:
+        raise SystemExit(f"--val-corpus {args.val_corpus!r} matched NO files — refusing silent fallback to mixed val")
 
     train_b = CorpusBatcher(train_rows, max_tokens=args.max_tokens, seed=1)
     val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2)
+    sel_b = CorpusBatcher(sel_rows, max_tokens=args.max_tokens, seed=3) if sel_rows else None
 
     model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers, matchability=args.matchability)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
@@ -84,12 +111,13 @@ def main() -> None:
         best_val = ckpt.get("best_val", best_val)
         print(f"resumed from epoch {ckpt['epoch']}")
 
-    def run_val() -> float:
+    def run_val(batcher=None) -> tuple[float, float]:
+        batcher = batcher or val_b
         model.eval()
         tot, count = 0.0, 0
         accs = []
         with torch.no_grad():
-            for batch_samples in val_b:
+            for batch_samples in batcher:
                 batch = collate(batch_samples, device)
                 out = model(batch)
                 loss, m = alignment_loss(out, batch)
@@ -125,6 +153,11 @@ def main() -> None:
             "lr": sched.get_last_lr()[0],
             "seconds": round(time.time() - t0, 1),
         }
+        if sel_b is not None:
+            sel_loss, sel_acc = run_val(sel_b)
+            rec["val_mix_loss"], rec["val_mix_acc"] = rec["val_loss"], rec["val_acc"]
+            rec["val_loss"], rec["val_acc"] = round(sel_loss, 4), round(sel_acc, 4)
+            val_loss = sel_loss  # selection criterion = dedicated set
         print(json.dumps(rec), flush=True)
         with open(log_path, "a") as fh:
             fh.write(json.dumps(rec) + "\n")
@@ -141,6 +174,9 @@ def main() -> None:
             best_val = val_loss
             state["best_val"] = best_val
             torch.save(state, run_dir / "best.pt")
+        if args.snapshot_every and (epoch + 1) % args.snapshot_every == 0:
+            torch.save({"model": model.state_dict(), "epoch": epoch, "config": vars(args)},
+                       run_dir / f"snap-e{epoch}.pt")
 
 
 if __name__ == "__main__":
