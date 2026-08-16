@@ -43,6 +43,13 @@ MAX_TOKENS="${MAX_TOKENS:-6000}"
 LR="${LR:-3e-4}"
 # Same globs as the local run, rebased onto $TMPDIR.
 CORPUS_GLOBS="${CORPUS_GLOBS:-v1-*.jsonl,v2orn-light.jsonl,v3exag-*.jsonl,selfsup-v2.jsonl,selfsup-v2b.jsonl}"
+# Dedicated validation corpus (real-music proxy). Empty = train.py's internal
+# val_frac split off the training mix, which cannot detect overfitting TO that
+# mix — see the v4h100 post-mortem. Staged alongside the training files.
+VAL_CORPUS="${VAL_CORPUS:-}"
+# 0 = off. N = write runs/<name>/snap-eNNN.pt every N epochs, for offline
+# checkpoint selection against a real benchmark.
+SNAPSHOT_EVERY="${SNAPSHOT_EVERY:-0}"
 
 module load devel/python/3.13.3-gnu-14.2
 PY="$HOME/venvs/ml-cu128/bin/python"
@@ -57,12 +64,32 @@ IFS=',' read -ra GLOBS <<< "$CORPUS_GLOBS"
 for g in "${GLOBS[@]}"; do
     cp -v "$REPO"/data/corpus/$g "$STAGE"/ 2>/dev/null || true
 done
-echo "staged $(ls -1 "$STAGE" | wc -l) corpus files, $(du -sh "$STAGE" | cut -f1)"
+echo "staged $(ls -1 "$STAGE" | wc -l) train files, $(du -sh "$STAGE" | cut -f1)"
 
 CORPUS=""
 for g in "${GLOBS[@]}"; do
     CORPUS="${CORPUS:+$CORPUS,}$STAGE/$g"
 done
+
+# Validation corpus is staged into its OWN directory: staging it beside the
+# training files would let the train globs swallow it and silently train on
+# the validation set.
+VAL_ARGS=()
+if [ -n "$VAL_CORPUS" ]; then
+    VSTAGE="$TMPDIR/valcorpus"
+    mkdir -p "$VSTAGE"
+    IFS=',' read -ra VGLOBS <<< "$VAL_CORPUS"
+    VCORPUS=""
+    for g in "${VGLOBS[@]}"; do
+        cp "$REPO"/data/corpus/$g "$VSTAGE"/ 2>/dev/null || true
+        VCORPUS="${VCORPUS:+$VCORPUS,}$VSTAGE/$g"
+    done
+    echo "staged $(ls -1 "$VSTAGE" | wc -l) val files: $(ls -1 "$VSTAGE" | tr '\n' ' ')"
+    VAL_ARGS=(--val-corpus "$VCORPUS")
+fi
+
+SNAP_ARGS=()
+[ "$SNAPSHOT_EVERY" != "0" ] && SNAP_ARGS=(--snapshot-every "$SNAPSHOT_EVERY")
 
 # --- run ---------------------------------------------------------------------
 echo "=== $(date -Is) job $SLURM_JOB_ID on $(hostname) ==="
@@ -78,6 +105,8 @@ srun "$PY" -W ignore scripts/train.py \
     --n-layers "$N_LAYERS" \
     --matchability \
     --device cuda \
+    "${VAL_ARGS[@]}" \
+    "${SNAP_ARGS[@]}" \
     --run "$RUN"
 
 echo "=== $(date -Is) done ==="
