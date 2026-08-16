@@ -687,3 +687,7 @@ deterministic and reproducible from eval/results/*.json + checkpoints).
 the whole real-val-selected region (e21-e23) beats DualDTW .9852; not a
 lucky epoch. Result stands. Consolidating deliverable: models/mlign-v1.pt
 (= snap-e021), CLI default, docs/RESULTS.md, README.
+**~20:50 Deliverable consolidated:** models/mlign-v1.pt (release ckpt, in git),
+CLI defaults to it (E2E verified: 314 matches, conf .994 on D783), docs/RESULTS.md
+generated from JSON by scripts/make_results.py, README rewritten. Bracket
+e23/24/25 of v6real2 evaluating on dev-long (detached).
