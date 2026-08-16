@@ -1,9 +1,11 @@
 # MLign — STATE (compaction-proof summary)
 
 Budget: UNKNOWN / share 9.1% (tier low) / THROTTLE (Stand 2026-08-16T21:10+02:00)
-Rule (verwaltung, 2026-08-16): run `credits budget --agent mlign --json` at the
-start of every cycle; RUN=normal, THROTTLE=lean (≤3 agents, sonnet/haiku,
-no adversarial fan-outs), HALT=finish cleanly, rewrite STATE.md, wake ≥3600s.
+Rule (verwaltung/Niels, 2026-08-16): run `credits budget --agent mlign --json` at
+the start of every cycle; RUN=normal, THROTTLE=no new expensive fronts, defer
+discretionary phases, fan-out ≤3 (model choice is mine; Opus 5 or smaller),
+HALT=finish cleanly, rewrite STATE.md, wake ≥3600s. Plan heavy phases against
+hours_until_reset; check `credits top` before any fan-out.
 Wakeups ≥1200s unless waiting on something external.
 
 ## Where the mission stands
