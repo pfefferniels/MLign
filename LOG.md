@@ -556,3 +556,9 @@ validity is the real gap. SHIPPED: --val-corpus dedicated selection set
 source (scripts/corpus/real_gt.py: nASAP train-split GT windows, val/train
 piece-disjoint) — the first REAL supervised rows in the program (DESIGN §5C
 finally). Generating realgt-val + realgt-train now.
+
+**~16:10 v5real SUBMITTED to cluster agent:** first run with REAL selection
+(realgt-val 1,569 rows) + real fine-tune rows (realgt-train 6,284 — DESIGN §5C
+finally live) + snapshots every 2 epochs (atomic writes) → dev picks the
+true best. 15 train files, 32 epochs, d192/L4, ~2.2h. Also: new stgall agent
+routed to the cluster bridge (Niels pointed it at me by mistake).
