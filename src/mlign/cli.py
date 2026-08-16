@@ -9,8 +9,8 @@ SCORE: .mei (parsed via espressivo → exact xml:ids) or .musicxml/.xml
   match  — partitura match file (parangonar-compatible)
   jsonl  — mpmify row schema mirror
 
-Model checkpoint resolution: --ckpt, else $MLIGN_CKPT, else runs/v0-syn/best.pt
-relative to the repo root.
+Model checkpoint resolution: --ckpt, else $MLIGN_CKPT, else models/mlign-v1.pt
+(the released model) relative to the repo root.
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def main(argv=None) -> None:
     al.add_argument("performance")
     al.add_argument("-o", "--out", default="-")
     al.add_argument("--format", choices=["json", "match", "jsonl"], default="json")
-    al.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "runs/v0-syn/best.pt")))
+    al.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "models/mlign-v1.pt")))
     al.add_argument("--mdiv", type=int, default=0)
     al.add_argument("--engine", choices=["model", "baseline"], default="model")
     args = ap.parse_args(argv)
@@ -150,11 +150,15 @@ def main(argv=None) -> None:
         from .infer import align_with_model
         from .model import ModelConfig, NoteAligner
 
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = "cpu"  # inference is light; CPU avoids MPS allocator quirks
         ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
         cfg = ckpt.get("config", {})
         model = NoteAligner(
-            ModelConfig(d_model=cfg.get("d_model", 192), n_layers=cfg.get("n_layers", 4))
+            ModelConfig(
+                d_model=cfg.get("d_model", 192),
+                n_layers=cfg.get("n_layers", 4),
+                matchability=cfg.get("matchability", False),
+            )
         ).to(device)
         model.load_state_dict(ckpt["model"])
         model.eval()

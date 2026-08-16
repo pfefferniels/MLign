@@ -683,3 +683,7 @@ two-way corpus difference). Benchmarking bracket e23/e24/e25 on dev-long
 via the cluster agent with honest provenance caveats (their check covers
 job/log integrity; benchmark numbers are mine to defend — they are
 deterministic and reproducible from eval/results/*.json + checkpoints).
+**~20:20 CONFIRMED robust:** v5real-e023 holdout .9874 (63W/17L, p<1e-4) —
+the whole real-val-selected region (e21-e23) beats DualDTW .9852; not a
+lucky epoch. Result stands. Consolidating deliverable: models/mlign-v1.pt
+(= snap-e021), CLI default, docs/RESULTS.md, README.

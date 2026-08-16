@@ -5,3 +5,4 @@ __pycache__/
 runs/
 .venv/
 venv/
+!models/mlign-v1.pt
