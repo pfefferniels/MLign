@@ -46,6 +46,47 @@ def role_of(piece: str, val_frac: float = 0.25) -> str:
     return "val" if h < val_frac * 1000 else "train"
 
 
+# Composer quotas for a HOLDOUT-REPRESENTATIVE selection set (v2 role "val2"):
+# proportions of the nASAP robust test split (Beethoven 28 / Bach 19 / Liszt
+# 17 / Chopin 13 / Schumann 6 / Rachmaninoff 1 of 84), applied to train-split
+# pieces only. The v1 val set was Chopin/Schubert/Haydn-heavy and blind to
+# long dense sonata movements with heavy deletions — v5real regressed exactly
+# there while setting dev records. Ordering within composer prefers
+# deletion-heavy performances (the failure class) so the proxy sees them.
+VAL2_QUOTA = {"Beethoven": 0.33, "Bach": 0.23, "Liszt": 0.20, "Chopin": 0.15,
+              "Schumann": 0.07, "Rachmaninoff": 0.02}
+
+
+def select_val2(entries, target_perfs: int = 90):
+    """Pick ~target_perfs performances from train-split entries by composer
+    quota, preferring deletion-heavy performances within each composer.
+    Pieces chosen here are the val2 role; everything else stays train."""
+    from collections import defaultdict
+
+    by_comp = defaultdict(list)
+    for e in entries:
+        c = e["piece"].split("/")[0]
+        if c in VAL2_QUOTA:
+            t = load_match(e["match"])
+            n = len(t.matches) + len(t.deletions)
+            del_rate = len(t.deletions) / n if n else 0.0
+            by_comp[c].append((del_rate, e))
+    chosen, chosen_pieces = [], set()
+    for c, frac in VAL2_QUOTA.items():
+        want = max(1, round(target_perfs * frac))
+        # deletion-heavy first, but cap 2 perfs per piece for diversity
+        per_piece = defaultdict(int)
+        for del_rate, e in sorted(by_comp[c], key=lambda t: -t[0]):
+            if len([x for x in chosen if x["piece"].split("/")[0] == c]) >= want:
+                break
+            if per_piece[e["piece"]] >= 2:
+                continue
+            per_piece[e["piece"]] += 1
+            chosen.append(e)
+            chosen_pieces.add(e["piece"])
+    return chosen, chosen_pieces
+
+
 def rows_for(entry, want_role: str) -> list[dict]:
     truth = load_match(entry["match"])
     score = ScoreTable.from_musicxml(entry["score"])
@@ -106,13 +147,26 @@ def rows_for(entry, want_role: str) -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
-    ap.add_argument("--role", choices=["val", "train"], required=True)
+    ap.add_argument("--role", choices=["val", "train", "val2", "train2"], required=True,
+                    help="val/train: hash split (v1). val2/train2: holdout-representative "
+                         "composer-quota val2 (deletion-heavy preferred), train2 = the rest.")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
     folders, _ = test_split()
     idx = NasapIndex.build(ROOT / "data/benchmarks/asap-dataset", robust_only=True)
-    entries = [e for e in idx.entries if e["piece"] not in folders and role_of(e["piece"]) == args.role]
+    train_split = [e for e in idx.entries if e["piece"] not in folders]
+    if args.role in ("val2", "train2"):
+        val2, val2_pieces = select_val2(train_split)
+        if args.role == "val2":
+            entries = val2
+        else:
+            entries = [e for e in train_split if e["piece"] not in val2_pieces]
+        from collections import Counter
+        print("val2 composers:", Counter(e["piece"].split("/")[0] for e in val2).most_common(), file=sys.stderr)
+        print("val2 pieces:", len(val2_pieces), "| train2 perfs:", len(train_split) - sum(1 for e in train_split if e["piece"] in val2_pieces), file=sys.stderr)
+    else:
+        entries = [e for e in train_split if role_of(e["piece"]) == args.role]
     if args.limit:
         entries = entries[: args.limit]
     print(f"{len(entries)} performances for role={args.role}", file=sys.stderr)
