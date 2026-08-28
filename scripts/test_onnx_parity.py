@@ -21,7 +21,7 @@ accept an ONNX or TypeScript port on the triples alone.
 
 Usage:
   PYTHONPATH=src .venv/bin/python scripts/test_onnx_parity.py \
-      --onnx models/mlign-v1.onnx --ckpt models/mlign-v1.pt
+      --onnx models/mlign-v2.onnx --ckpt models/mlign-v2.pt
 """
 
 from __future__ import annotations
@@ -216,8 +216,8 @@ def check_end_to_end(sess: ort.InferenceSession, model, score: ScoreTable, perf:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--onnx", default="models/mlign-v1.onnx")
-    ap.add_argument("--ckpt", default="models/mlign-v1.pt")
+    ap.add_argument("--onnx", default="models/mlign-v2.onnx")
+    ap.add_argument("--ckpt", default="models/mlign-v2.pt")
     ap.add_argument("--lengths", type=int, nargs="+", default=[300, 600, 1200, 2000])
     ap.add_argument("--score", default="web/demo/schubert_d783_15.musicxml")
     ap.add_argument("--perf", default="web/demo/schubert_d783_15_p01.mid")

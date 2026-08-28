@@ -91,6 +91,13 @@ fi
 SNAP_ARGS=()
 [ "$SNAPSHOT_EVERY" != "0" ] && SNAP_ARGS=(--snapshot-every "$SNAPSHOT_EVERY")
 
+# Ornament attribution head. Its loss is supervised only on espressivo-rendered
+# rows (meta.gen = mlign-*); real-GT and self-supervised rows are ignored by it,
+# so enabling this is safe for any mix but only useful when the mix contains
+# ornament shards.
+ATTR_ARGS=()
+[ "${ATTRIBUTION:-0}" != "0" ] && ATTR_ARGS=(--attribution --attr-weight "${ATTR_WEIGHT:-0.2}")
+
 # --- run ---------------------------------------------------------------------
 echo "=== $(date -Is) job $SLURM_JOB_ID on $(hostname) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
@@ -107,6 +114,7 @@ srun "$PY" -W ignore scripts/train.py \
     --device cuda \
     "${VAL_ARGS[@]}" \
     "${SNAP_ARGS[@]}" \
+    "${ATTR_ARGS[@]}" \
     --run "$RUN"
 
 echo "=== $(date -Is) done ==="

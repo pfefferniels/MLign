@@ -732,7 +732,7 @@ def _check_pitch_order_irrelevant(row, sim, null_s, null_p, triples, trials: int
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", default="test/golden", help="fixture root (default: test/golden)")
-    ap.add_argument("--ckpt", default="models/mlign-v1.pt")
+    ap.add_argument("--ckpt", default="models/mlign-v2.pt")
     ap.add_argument("--pieces", default="", help="comma-separated slugs (default: all)")
     ap.add_argument("--verify", action="store_true", help="verify existing fixtures, generate nothing")
     ap.add_argument("--device", default="cpu")

@@ -6,6 +6,7 @@ runs/
 .venv/
 venv/
 !models/mlign-v1.pt
+!models/mlign-v2.pt
 
 # agent working notes (kept locally, not published)
 notes/

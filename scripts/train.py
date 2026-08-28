@@ -53,6 +53,10 @@ def main() -> None:
     ap.add_argument("--d-model", type=int, default=192)
     ap.add_argument("--n-layers", type=int, default=4)
     ap.add_argument("--matchability", action="store_true")
+    ap.add_argument("--attribution", action="store_true",
+                    help="train the ornament-attribution head (needs espressivo-rendered "
+                         "rows; other sources are ignored by the head's loss)")
+    ap.add_argument("--attr-weight", type=float, default=0.2)
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
@@ -103,7 +107,10 @@ def main() -> None:
     val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2)
     sel_b = CorpusBatcher(sel_rows, max_tokens=args.max_tokens, seed=3) if sel_rows else None
 
-    model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers, matchability=args.matchability)).to(device)
+    model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers,
+                                    matchability=args.matchability,
+                                    attribution=args.attribution,
+                                    attr_weight=args.attr_weight)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params / 1e6:.2f}M", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
@@ -121,21 +128,37 @@ def main() -> None:
         best_val = ckpt.get("best_val", best_val)
         print(f"resumed from epoch {ckpt['epoch']}")
 
-    def run_val(batcher=None) -> tuple[float, float]:
+    def run_val(batcher=None) -> tuple[float, float, dict]:
+        """Returns (selection_loss, acc, extra).
+
+        selection_loss is the ALIGNMENT loss only, never the combined one:
+        adding the attribution term to the number that picks checkpoints would
+        silently change the selection criterion that produced mlign-v1, and
+        checkpoint selection is the one thing in this project that has already
+        been shown to decide the benchmark (STATE: mixed-synthetic and 4x22
+        both pick wrong). Attribution is reported alongside, not folded in.
+        """
         batcher = batcher or val_b
         model.eval()
         tot, count = 0.0, 0
         accs = []
+        orn_hit, orn_n = 0.0, 0
         with torch.no_grad():
             for batch_samples in batcher:
                 batch = collate(batch_samples, device)
                 out = model(batch)
-                loss, m = alignment_loss(out, batch)
-                tot += loss.item()
+                _, m = alignment_loss(out, batch, weight_attr=args.attr_weight)
+                tot += 0.5 * (m["loss_s"] + m["loss_p"])
                 accs.append((m["acc_s"] + m["acc_p"]) / 2)
+                # weight by ornament count: most batches have none, so a plain
+                # mean over batches would be dominated by empty ones
+                orn_hit += m.get("acc_attr_orn", 0.0) * m.get("n_attr_orn", 0)
+                orn_n += m.get("n_attr_orn", 0)
                 count += 1
         model.train()
-        return tot / max(count, 1), sum(accs) / max(len(accs), 1)
+        extra = {"attr_orn_acc": round(orn_hit / orn_n, 4) if orn_n else None,
+                 "attr_orn_n": orn_n}
+        return tot / max(count, 1), sum(accs) / max(len(accs), 1), extra
 
     model.train()
     for epoch in range(start_epoch, args.epochs):
@@ -144,7 +167,7 @@ def main() -> None:
         for batch_samples in train_b:
             batch = collate(batch_samples, device)
             out = model(batch)
-            loss, metrics = alignment_loss(out, batch)
+            loss, metrics = alignment_loss(out, batch, weight_attr=args.attr_weight)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -154,7 +177,7 @@ def main() -> None:
             count += 1
             if device == "mps" and count % 50 == 0:
                 torch.mps.empty_cache()
-        val_loss, val_acc = run_val()
+        val_loss, val_acc, val_extra = run_val()
         rec = {
             "epoch": epoch,
             "train_loss": round(tot / max(count, 1), 4),
@@ -163,11 +186,18 @@ def main() -> None:
             "lr": sched.get_last_lr()[0],
             "seconds": round(time.time() - t0, 1),
         }
+        if val_extra["attr_orn_n"]:
+            rec["attr_orn_acc"] = val_extra["attr_orn_acc"]
+            rec["attr_orn_n"] = val_extra["attr_orn_n"]
         if sel_b is not None:
-            sel_loss, sel_acc = run_val(sel_b)
+            sel_loss, sel_acc, sel_extra = run_val(sel_b)
             rec["val_mix_loss"], rec["val_mix_acc"] = rec["val_loss"], rec["val_acc"]
             rec["val_loss"], rec["val_acc"] = round(sel_loss, 4), round(sel_acc, 4)
             val_loss = sel_loss  # selection criterion = dedicated set
+            # The real-music selection set carries no ornament provenance, so
+            # attribution is always reported from the synthetic mix.
+            if sel_extra["attr_orn_n"]:
+                rec["attr_orn_acc_sel"] = sel_extra["attr_orn_acc"]
         print(json.dumps(rec), flush=True)
         with open(log_path, "a") as fh:
             fh.write(json.dumps(rec) + "\n")

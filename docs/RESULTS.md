@@ -14,14 +14,17 @@ pieces (all self-sup/real-GT corpora exclude the folders).
 
 | system | match F | ins F | del F | n |
 |---|---|---|---|---|
-| **MLign v1** (`models/mlign-v1.pt` = v5real epoch 21) | **0.9878 ± 0.0174** | 0.9448 | 0.8772 | 84 |
+| **MLign v2** (`models/mlign-v2.pt` = v8early epoch 30, attribution head) | **0.9895 ± 0.0164** | 0.9485 | 0.9036 | 84 |
+| MLign v7attr epoch 22 (attribution, pre-early-corpus) | 0.9899 ± 0.0156 | 0.9532 | 0.9006 | 84 |
+| MLign v1 (`models/mlign-v1.pt` = v5real epoch 21) | 0.9878 ± 0.0174 | 0.9448 | 0.8772 | 84 |
 | MLign v5real epoch 23 (confirmation) | 0.9874 ± 0.0181 | 0.9419 | 0.8776 | 84 |
 | DualDTW (parangonar 3.1.0, hand-tuned SOTA) | 0.9852 ± 0.0170 | 0.9225 | 0.8237 | 84 |
 | TheGlueNote (parangonar 3.1.0, ISMIR 2024) | 0.9778 ± 0.0245 | 0.8206 | 0.8148 | 84 |
 | MLign v3 (pre-real-selection) | 0.9833 ± 0.0201 | 0.9271 | 0.7901 | 84 |
 | MLign v5real epoch 5 (dev-4x22 record — the wrong pick) | 0.9799 ± 0.0246 | 0.9261 | 0.7680 | 84 |
 
-Paired per-performance, MLign v1 vs DualDTW: **65 wins / 2 ties / 17 losses**, one-sided sign test p = 4.48e-08.
+Paired per-performance, MLign v2 vs DualDTW: **69 wins / 3 ties / 12 losses**, one-sided sign test p = 3.52e-11.
+MLign v2 vs MLign v1: **57 wins / 13 ties / 14 losses**, one-sided sign test p = 1.33e-07.
 Epoch-23 confirmation vs DualDTW: 63W / 4T / 17L, p = 1.13e-07 — the result is robust to snapshot choice within the real-validation-selected region.
 
 Mean paired difference by composer (MLign − DualDTW):

@@ -64,7 +64,7 @@ winner is aligned as usual.
 
 | source | rows | what |
 |---|---|---|
-| espressivo renders | 64 k | random 1–2-part scores (mpmify samplers) performed with sampled MPM maps (tempo, rubato, dynamics, articulation, asynchrony, movement), generated ornaments on 30–50 % of pieces, an exaggeration curriculum on part of it, and the performer-error layer (`src/robustness/`: deletions, slips, wrong notes, timing shifts, restart-with-correction, skipped passages, timing jitter). Ground truth from espressivo's per-note provenance and the layer's edit log. |
+| espressivo renders | 64 k | random 1–2-part scores (mpmify samplers) performed with sampled MPM maps (tempo, rubato, dynamics, articulation, asynchrony, movement), generated ornaments (trills, mordents, turns) at a 0.3–0.5 probability per eligible note, which puts at least one ornament in ~99 % of pieces, an exaggeration curriculum on part of it, and the performer-error layer (`src/robustness/`: deletions, slips, wrong notes, timing shifts, restart-with-correction, skipped passages, timing jitter). Ground truth from espressivo's per-note provenance and the layer's edit log. |
 | self-supervised real MIDI | 44 k | 512-note windows of nASAP training performances corrupted with a port of TheGlueNote's `reorder()` (deletions, insertions, skips, repeats, trills, tempo curves, jitter). |
 | real ground truth | 6 k | windows of nASAP training alignments (match files). |
 | real validation | 1.6 k | disjoint nASAP training pieces; the checkpoint-selection criterion. |
@@ -72,6 +72,91 @@ winner is aligned as usual.
 The released model (`v5real`, epoch 21) trained 32 epochs on one H100 in about
 two hours. All test-split pieces (nASAP robust ∩ MAESTRO-v2 test) are excluded
 from every source above.
+
+## Ornament attribution
+
+Every aligner in this space, ours included, answers "which played note is this
+score note?". None answers **"which played notes realize this ornament?"** —
+a trill's 11 notes become 1 match and 10 unattributed insertions.
+
+We surveyed the three reference systems and the benchmark ground truth before
+building anything:
+
+| system | ornament → principal attribution |
+|---|---|
+| Nakamura HMM (`AlignmentTool`) | none; no ornament handling in the source |
+| TheGlueNote | none; no ornament handling in the source |
+| parangonar, as benchmarked | none — `process_ornaments=False` is the default |
+| parangonar, `process_ornaments=True` | picks **one** performed note per ornament-marked score note (`match/matchers.py:1181-1220`); the rest of the figure stays unattributed insertions |
+
+So the gap is real, but two things about it are easy to overstate, and both
+bound what this feature can claim:
+
+**The representation is not new.** partitura's match format v1.0.0 already has
+`ornament({Anchor},{OrnamentType})-{NoteLine}` (`io/matchlines_v1.py:1090`),
+read into `label="ornament"` records. The anchor slot exists; nobody fills it.
+The claim is "first system to predict it", not "new representation".
+
+**There is no ground truth anywhere.** Counted over the corpora in `data/`:
+ASAP's 1063 match files contain **zero** `ornament(` lines (they are format
+v5.0; the 164 files matching "trill" carry `trill-mark` as a *score* attribute,
+and the trill's remaining notes are plain insertions). Vienna 4x22 (88 files)
+and Batik (36 files) are format **1.0.0** — the format that supports anchors —
+and also contain zero. One-to-many matches occur 11 times in 1063 ASAP files,
+none of them ornament-marked. Our espressivo corpus is therefore the only
+source of attribution labels that exists, which means the capability can be
+trained and demonstrated but **not** benchmarked against prior work.
+
+Consequences that shape the implementation:
+
+- Attribution is a **separate bilinear head** (`ModelConfig.attribution`), not
+  a reuse of the match similarity: the match head is trained to send ornament
+  notes to the null column, so one score cannot rank both. Additive by
+  construction — alignment metrics cannot regress from enabling it.
+- Its loss is supervised **only on espressivo-rendered rows**
+  (`meta.gen` = `mlign-*`). Real-GT and self-supervised rows contain real
+  trills that are simply unlabelled; an empty `orn` there means "unknown", not
+  "none", and supervising it would teach the head that real trills are not
+  ornaments.
+- Checkpoint **selection stays on the alignment loss alone**
+  (`scripts/train.py:run_val`). Selection is the one choice already shown to
+  decide this benchmark, and attribution quality must not be allowed to move
+  it.
+- The benchmark output convention is untouched: ornament notes are still
+  emitted as insertions, since nASAP scores them that way. Attribution is an
+  extra channel, landing on the MEI `xml:id` of the principal.
+
+## Target repertoire: early recordings
+
+The benchmarks above (nASAP, 4x22, Batik) are all post-war playing, while the
+intended application is **early recordings** — pre-WWII rolls and 78s, where
+deviation is both larger and different in kind: broad and dense arpeggiation,
+free tempo, heavier ornamentation, and notes added beyond the text. Benchmark
+rank and fitness for that repertoire can therefore diverge, and where they do,
+the repertoire wins. The generator carries four adaptations:
+
+- **Sampled `<temporalSpread>`** (`--breadth f`). Each ornament gets its own
+  `ornamentDef` with a drawn frame length and placement, instead of the three
+  fixed defs the corpus used to share (trill 100 %, mordent 30 %, turn 50 %,
+  no offset). A share of figures is anticipated — begun before the notated
+  onset — as early pianists routinely do. Measured over 30 pieces, breadth
+  1 → 3 moves the median realized ornament span from 312 ms to 476 ms and the
+  longest figure from 8 to 16 notes.
+- **Exaggeration profiles** (`--exaggerate early`). The original curriculum
+  ranges were calibrated on post-war playing; `early` widens them, rubato
+  (0.5–3.5) and tempo (0.4–3.0) above all.
+- **Consonant added notes.** Distinct from the neighbour-slip error model
+  (±1–2 semitones, velocity ×0.4–0.75), which describes a mistake, not the
+  intentional octave doublings, filled chord tones and unwritten ornaments of
+  early practice. Added notes carry an anchor, so they feed the attribution
+  head like any other ornament.
+- **`imprecisionMap` humanisation**, so synthetic evaluation is not measured
+  on unrealistically clean renders.
+
+The last point is what makes the attribution head evaluable at all: with no
+ornament ground truth in any real corpus, synthetic data is the only test set
+there is, and it is only worth trusting to the extent that its performances
+are not mechanically exact.
 
 ## What did not work, briefly
 

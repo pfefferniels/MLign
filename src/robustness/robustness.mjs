@@ -7,16 +7,22 @@
  *   applyRobustness(data, config, seed) → { data, edits }
  * — a pure function; all randomness through the explicit seeded rng; every op
  * class behind a config flag (all off by default); edit ops typed
- * delete/insert/substitute/shift/restart/skip, each carrying the source note
- * reference so the log is lossless.
+ * delete/insert/add/substitute/shift/restart/skip, each carrying the source
+ * note reference so the log is lossless.
+ *
+ * Two unrelated models produce extra notes, and the distinction matters for
+ * what the aligner learns: `insert` is the ERROR model (a brushed neighbour
+ * key, quiet and chromatic) while `add` is the INTENT model of early-recording
+ * piano style — octave doublings, filled-in chord tones and unwritten
+ * ornaments, consonant and played at full weight.
  *
  * Ground-truth semantics of an edited PerformanceData:
  *   - a note with id !== null is a MATCH to the score note of that xml:id
  *     (substituted pitches and shifted onsets remain matches);
- *   - a note with id === null is an INSERTION (spurious hit, or the botched
- *     first pass of a correction-restart — the replay keeps the score ids,
- *     mirroring the nASAP annotation convention that the successful pass is
- *     the aligned one);
+ *   - a note with id === null is an INSERTION (spurious hit, deliberate
+ *     addition, or the botched first pass of a correction-restart — the replay
+ *     keeps the score ids, mirroring the nASAP annotation convention that the
+ *     successful pass is the aligned one);
  *   - score ids appearing in delete/skip edits are DELETIONS.
  * `editsToAlignment` in gt.mjs flattens exactly this.
  *
@@ -31,6 +37,14 @@ import { makeRng, uniform, normal, chance, pick, poisson, randint } from './rng.
 export const defaultConfig = Object.freeze({
   delete: { rate: 0 },
   insert: { rate: 0 },
+  // Consonant added notes (see the header): rate counts EVENTS per 100 notes;
+  // an octave/chord-tone event is one note, an ornament event a short figure.
+  add: {
+    rate: 0,
+    octaveWeight: 0.45, chordToneWeight: 0.4, ornamentWeight: 0.15,
+    spreadMs: 18, velScale: [0.8, 1.1],
+    ornamentNotes: [2, 4], ornamentStepMs: [28, 65],
+  },
   substitute: { rate: 0, octaveWeight: 0.15 },
   shift: { rate: 0, stdMs: 35, hesitationP: 0.15, hesitationMs: [90, 300] },
   restart: { lambda: 0, spanMs: [800, 4000], gapMs: [250, 1500], dropLastP: 0.5 },
@@ -42,15 +56,16 @@ export const defaultConfig = Object.freeze({
 });
 
 export const presetLight = mergeConfig({
-  delete: { rate: 0.4 }, insert: { rate: 0.4 }, substitute: { rate: 0.5 }, shift: { rate: 1.5 },
+  delete: { rate: 0.4 }, insert: { rate: 0.4 }, add: { rate: 0.8 }, substitute: { rate: 0.5 },
+  shift: { rate: 1.5 },
 });
 export const presetMedium = mergeConfig({
-  delete: { rate: 1.2 }, insert: { rate: 1.2 }, substitute: { rate: 1.5 }, shift: { rate: 4 },
-  restart: { lambda: 0.4 }, skip: { lambda: 0.25 },
+  delete: { rate: 1.2 }, insert: { rate: 1.2 }, add: { rate: 2.5 }, substitute: { rate: 1.5 },
+  shift: { rate: 4 }, restart: { lambda: 0.4 }, skip: { lambda: 0.25 },
 });
 export const presetHeavy = mergeConfig({
-  delete: { rate: 3 }, insert: { rate: 3 }, substitute: { rate: 4 }, shift: { rate: 8 },
-  restart: { lambda: 1.2 }, skip: { lambda: 0.7 },
+  delete: { rate: 3 }, insert: { rate: 3 }, add: { rate: 6 }, substitute: { rate: 4 },
+  shift: { rate: 8 }, restart: { lambda: 1.2 }, skip: { lambda: 0.7 },
 });
 
 export function mergeConfig(partial) {
@@ -94,8 +109,15 @@ export function applyRobustness(data, config, seed) {
 
   const pDel = cfg.delete.rate / 100;
   const pIns = cfg.insert.rate / 100;
+  const pAdd = cfg.add.rate / 100;
   const pSub = cfg.substitute.rate / 100;
   const pShift = cfg.shift.rate / 100;
+
+  // Harmony an addition may draw a chord tone from: the notes as they stand
+  // after the structural ops, onset-sorted across parts. Built once — the
+  // local ops that follow move onsets by tens of ms at most, well inside the
+  // window `soundingPitchClasses` queries.
+  const sounding = pAdd > 0 ? soundingIndex(parts) : null;
 
   for (let pi = 0; pi < parts.length; pi++) {
     const part = parts[pi];
@@ -140,6 +162,18 @@ export function applyRobustness(data, config, seed) {
         slip.velocity = clampVelocity(Math.round(note.velocity * uniform(rng, 0.4, 0.75)));
         edits.push({ op: 'insert', part: pi, near: note.id, note: cloneNote(slip) });
         inserted.push(slip);
+      }
+
+      // Consonant addition. Guarded on the rate so a disabled `add` draws no
+      // random numbers at all and leaves every other op's stream untouched.
+      if (!isCopy && pAdd > 0 && chance(rng, pAdd)) {
+        for (const added of addition(note, cfg.add, rng, sounding)) {
+          edits.push({
+            op: 'add', part: pi, near: note.id, flavour: added.origin.flavour,
+            slot: added.origin.slot ?? 0, note: cloneNote(added),
+          });
+          inserted.push(added);
+        }
       }
 
       kept.push(note);
@@ -205,8 +239,9 @@ function applyRestart(parts, cfg, rng, edits) {
         // Provenance travels ON the note (not only in the log): a later
         // structural op may shift this copy in time, so position is not a
         // stable key. When this restart re-copies an earlier insertion
-        // (copy-of-copy, or a slip), the score reference is inherited through
-        // its origin so provenance always bottoms out at a real score id.
+        // (copy-of-copy, a slip, or a consonant addition — all three key their
+        // anchor as `near`), the score reference is inherited through its
+        // origin so provenance always bottoms out at a real score id.
         const sourceId = note.id ?? note.origin?.sourceId ?? note.origin?.near ?? note.origin?.anchor ?? null;
         copy.id = null;
         copy.origin = { type: 'restart-first-pass', sourceId, t0 };
@@ -267,6 +302,140 @@ function applySkip(parts, cfg, rng, edits) {
   }
   edits.push({ op: 'skip', t0, t1, hesitationMs: hesitation, removed });
 }
+
+// ---------------------------------------------------------------------------
+// Consonant added notes. The anchor is always a real score note, and every
+// added note carries `near`/`anchor` back to it, so an addition is an
+// attributable insertion exactly like an espressivo-generated ornament note.
+// ---------------------------------------------------------------------------
+
+const PIANO_LO = 21;
+const PIANO_HI = 108;
+
+/** The added notes for one addition event on `note` (possibly empty). */
+function addition(note, cfg, rng, sounding) {
+  let flavour = pick(rng, ['octave', 'chordtone', 'ornament'],
+    [cfg.octaveWeight, cfg.chordToneWeight, cfg.ornamentWeight]);
+  // "Unwritten" only means anything on a note carrying no ornament sign; the
+  // facade flags the principals it ornamented and the figures it generated.
+  if (flavour === 'ornament' && (note.ornamented || note.ornamentSlot != null)) flavour = 'octave';
+  if (flavour === 'ornament') return ornamentFigure(note, cfg, rng);
+
+  let pitch = null;
+  if (flavour === 'chordtone') {
+    pitch = chordTone(note, rng, sounding);
+    if (pitch === null) flavour = 'octave'; // harmony offered nothing — double instead
+  }
+  if (flavour === 'octave') pitch = octaveDouble(note, rng);
+  if (pitch === null) return [];
+
+  // Doublings and fills are struck with the anchor and held with it.
+  const added = cloneNote(note);
+  added.id = null;
+  added.origin = { type: 'addition', near: note.id, anchor: note.id, flavour };
+  added.pitch = pitch;
+  const dt = uniform(rng, -cfg.spreadMs, cfg.spreadMs);
+  added.milliseconds.date += dt;
+  added.milliseconds.end += dt;
+  added.velocity = scaleVelocity(note.velocity, cfg, rng);
+  return [added];
+}
+
+/** Octave doubling: down for the bass, up for the treble, always in range. */
+function octaveDouble(note, rng) {
+  const down = note.pitch - 12 >= PIANO_LO;
+  const up = note.pitch + 12 <= PIANO_HI;
+  if (!down && !up) return null;
+  if (!down) return note.pitch + 12;
+  if (!up) return note.pitch - 12;
+  // The bass octave is the idiom; the treble doubling is the rarer one.
+  return chance(rng, note.pitch < 60 ? 0.8 : 0.35) ? note.pitch - 12 : note.pitch + 12;
+}
+
+/** Thirds, sixths and octaves, from the anchor, in either direction. */
+const CHORD_STEPS = [3, 4, 8, 9, 12];
+
+/**
+ * A chord tone filled in above or below the anchor, its pitch class taken from
+ * what actually sounds at the anchor's onset — never from a guessed key.
+ * null when the sounding harmony offers nothing.
+ */
+function chordTone(note, rng, sounding) {
+  const pcs = soundingPitchClasses(sounding, note.milliseconds.date);
+  const cands = [];
+  for (const step of CHORD_STEPS) {
+    for (const p of [note.pitch - step, note.pitch + step]) {
+      if (p < PIANO_LO || p > PIANO_HI) continue;
+      if (pcs.has(p % 12)) cands.push(p);
+    }
+  }
+  if (cands.length === 0) return null;
+  // The octave is trivially available (it is the anchor's own class) — take a
+  // real third or sixth whenever the harmony has one.
+  const inner = cands.filter((p) => Math.abs(p - note.pitch) !== 12);
+  return pick(rng, inner.length > 0 ? inner : cands);
+}
+
+/**
+ * A written-out ornament on a note that carries no ornament sign: an
+ * upper-neighbour alternation (trill/mordent), struck after the principal, or
+ * a turn figure led into the beat. The anchor keeps sounding — these are only
+ * the extra notes, so slot 0 is the first EXTRA, not the principal.
+ */
+function ornamentFigure(note, cfg, rng) {
+  const upper = randint(rng, 1, 2); // chromatic 1–2 ≈ the diatonic neighbour
+  const turn = chance(rng, 0.35);
+  const offsets = turn
+    ? [upper, 0, -upper] // …resolving onto the anchor
+    : Array.from({ length: randint(rng, cfg.ornamentNotes[0], cfg.ornamentNotes[1]) },
+      (_, k) => (k % 2 === 0 ? upper : 0));
+  const step = uniform(rng, cfg.ornamentStepMs[0], cfg.ornamentStepMs[1]);
+
+  const out = [];
+  offsets.forEach((semitones, slot) => {
+    const added = cloneNote(note);
+    added.id = null;
+    added.origin = {
+      type: 'addition', near: note.id, anchor: note.id, flavour: 'ornament',
+      ref: turn ? 'turn' : 'alternation', slot, pass: 0,
+    };
+    added.pitch = clampPitch(note.pitch + semitones);
+    // Turns lead into the anchor, alternations follow its attack.
+    added.milliseconds.date = turn
+      ? note.milliseconds.date - (offsets.length - slot) * step
+      : note.milliseconds.date + (slot + 1) * step;
+    added.milliseconds.end = added.milliseconds.date + Math.max(20, step * uniform(rng, 0.55, 0.95));
+    added.velocity = scaleVelocity(note.velocity, cfg, rng);
+    out.push(added);
+  });
+  return out;
+}
+
+/** Onset-sorted flat view of the notes, for the harmony query. */
+function soundingIndex(parts) {
+  const all = [];
+  for (const part of parts) {
+    for (const n of part.notes) {
+      all.push({ date: n.milliseconds.date, end: n.milliseconds.end, pitch: n.pitch });
+    }
+  }
+  all.sort((x, y) => x.date - y.date);
+  return all;
+}
+
+/** Struck within `SOUND_TOL` of t (asynchrony) or still held over it. */
+const SOUND_TOL = 25;
+function soundingPitchClasses(sounding, t) {
+  const pcs = new Set();
+  for (const n of sounding) {
+    if (n.date > t + SOUND_TOL) break; // onset-sorted
+    if (n.end > t || t - n.date <= SOUND_TOL) pcs.add(n.pitch % 12);
+  }
+  return pcs;
+}
+
+const scaleVelocity = (velocity, cfg, rng) =>
+  clampVelocity(Math.round(velocity * uniform(rng, cfg.velScale[0], cfg.velScale[1])));
 
 // ---------------------------------------------------------------------------
 

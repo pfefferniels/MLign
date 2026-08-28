@@ -17,7 +17,7 @@ learned `scale`. `scripts/test_onnx_parity.py` is what proves it.
 
 Usage:
   PYTHONPATH=src .venv/bin/python scripts/export_onnx.py \
-      --ckpt models/mlign-v1.pt --out models/mlign-v1.onnx
+      --ckpt models/mlign-v2.pt --out models/mlign-v2.onnx
 """
 
 from __future__ import annotations
@@ -102,6 +102,11 @@ def load_model(ckpt_path: Path) -> tuple[NoteAligner, dict]:  # (model, checkpoi
         dropout=float(cfg_dict.get("dropout", defaults.dropout)),
         max_rel=int(cfg_dict.get("max_rel", defaults.max_rel)),
         matchability=bool(cfg_dict.get("matchability", defaults.matchability)),
+        # Built so the state dict still loads strictly; the exported graph does
+        # NOT include it (see Enc.forward — encoder + match/matchability heads
+        # only), so the ONNX signature is identical with or without the head.
+        attribution=bool(cfg_dict.get(
+            "attribution", any(k.startswith("attr_") for k in ckpt["model"]))),
     )
     model = NoteAligner(cfg)
     model.load_state_dict(ckpt["model"])
@@ -287,8 +292,8 @@ def summarize(onnx_model: onnx.ModelProto, path: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--ckpt", default="models/mlign-v1.pt")
-    ap.add_argument("--out", default="models/mlign-v1.onnx")
+    ap.add_argument("--ckpt", default="models/mlign-v2.pt")
+    ap.add_argument("--out", default="models/mlign-v2.onnx")
     ap.add_argument("--opset", type=int, default=17)
     ap.add_argument("--fp16", action="store_true",
                     help="store large weights as float16 + Cast (halves the download; compute stays fp32)")

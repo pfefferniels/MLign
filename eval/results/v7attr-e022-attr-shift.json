@@ -1,0 +1,13 @@
+{
+  "rows": 2000,
+  "detect_p": 0.942,
+  "detect_r": 0.639,
+  "detect_f": 0.7614,
+  "attr_acc": 0.5814,
+  "attr_n": 119572,
+  "group_exact": 0.2529,
+  "group_n": 29599,
+  "ckpt": "runs/v7attr/best.pt",
+  "corpus": "data/corpus/shift-holdout.jsonl",
+  "tier": "synthetic-only"
+}

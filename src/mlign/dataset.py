@@ -85,6 +85,25 @@ def featurize(row: dict) -> dict:
         target_p[pi] = si
     # ins/del stay -1 (null); everything is covered by corpus invariants.
 
+    # Ornament attribution target: for every perf note, which score note it
+    # ornaments, or "none". Sentinels resolved at collate: -1 → none column,
+    # -2 → ignore (-100).
+    #
+    # Only espressivo-rendered rows carry exhaustive ornament provenance, so
+    # only they may be supervised. Real-GT and self-supervised rows DO contain
+    # trills — they are simply unlabelled — and an empty `orn` there means
+    # "unknown", not "none". Supervising them would teach the head that real
+    # trills are not ornaments, which is the one label error that would make
+    # the head useless on exactly the material we care about.
+    provenanced = str(row.get("meta", {}).get("gen", "")).startswith("mlign-")
+    target_attr = np.full(m, -1 if provenanced else -2, dtype=np.int64)
+    if provenanced:
+        for rec in row.get("orn", ()):
+            pi, anchor = int(rec[0]), int(rec[1])
+            # anchor < 0 = the generator lost the principal (ornament on a note
+            # that itself got deleted). Ignore rather than call it "none".
+            target_attr[pi] = anchor if anchor >= 0 else -2
+
     return {
         "pitch": pitch,
         "cont": cont,
@@ -92,6 +111,7 @@ def featurize(row: dict) -> dict:
         "position": position,
         "target_s": target_s,
         "target_p": target_p,
+        "target_attr": target_attr,
         "n": n,
         "m": m,
     }
@@ -110,6 +130,7 @@ def collate(samples: list[dict], device: str = "cpu") -> dict:
     pad = torch.ones((B, T), dtype=torch.bool)
     target_s = torch.full((B, n_max), -100, dtype=torch.long)
     target_p = torch.full((B, m_max), -100, dtype=torch.long)
+    target_attr = torch.full((B, m_max), -100, dtype=torch.long)
     n_score = torch.zeros(B, dtype=torch.long)
     n_perf = torch.zeros(B, dtype=torch.long)
 
@@ -126,6 +147,12 @@ def collate(samples: list[dict], device: str = "cpu") -> dict:
         tp = torch.from_numpy(s["target_p"]).clone()
         tp[tp < 0] = n_max
         target_p[b, : s["m"]] = tp
+        # -1 → the "none" column at n_max; -2 → unsupervised. Order matters:
+        # -2 must be rewritten after -1, and n_max is never negative.
+        ta = torch.from_numpy(s.get("target_attr", np.full(s["m"], -2, dtype=np.int64))).clone()
+        ta[ta == -1] = n_max
+        ta[ta == -2] = -100
+        target_attr[b, : s["m"]] = ta
         n_score[b] = s["n"]
         n_perf[b] = s["m"]
 
@@ -137,6 +164,7 @@ def collate(samples: list[dict], device: str = "cpu") -> dict:
         "pad": pad,
         "target_s": target_s,
         "target_p": target_p,
+        "target_attr": target_attr,
         "n_score": n_score,
         "n_perf": n_perf,
     }

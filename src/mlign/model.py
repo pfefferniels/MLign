@@ -35,6 +35,14 @@ class ModelConfig:
     # dustbin-vector nulls: null logit = logit(1 - σ_i) directly per note.
     # (research/01 §5.1: "unmatchable" is a property of the note, not a global.)
     matchability: bool = False
+    # Ornament attribution: a SECOND p→s distribution answering "which score
+    # note does this played note ornament, if any". Deliberately a separate
+    # bilinear map rather than a reuse of `sim`: the match head is trained to
+    # send ornament notes to the null column, so the same score cannot also
+    # rank their principal highly. Keeping it separate means the head is
+    # strictly additive — the alignment metrics cannot regress from adding it.
+    attribution: bool = False
+    attr_weight: float = 0.2
 
 
 class RelPosBias(nn.Module):
@@ -109,6 +117,13 @@ class NoteAligner(nn.Module):
         if cfg.matchability:
             self.matchability_s = nn.Linear(cfg.d_model, 1)
             self.matchability_p = nn.Linear(cfg.d_model, 1)
+        if cfg.attribution:
+            self.attr_s = nn.Linear(cfg.d_model, cfg.d_model)
+            self.attr_p = nn.Linear(cfg.d_model, cfg.d_model)
+            self.attr_none = nn.Parameter(torch.randn(cfg.d_model) * 0.02)
+            # own temperature, so attribution gradients never retune the
+            # match head's scale
+            self.attr_scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
 
     def encode(self, pitch, cont, segment, position, pad):
         x = self.pitch_emb(pitch) + self.segment_emb(segment) + self.cont_proj(cont)
@@ -163,15 +178,28 @@ class NoteAligner(nn.Module):
             torch.cat([p_pad, torch.zeros_like(p_pad[:, :1])], dim=1)[:, None, :], float("-inf")
         )
         logits_p2s = torch.cat([sim.transpose(1, 2), null_row], dim=2)
-        logits_p2s = logits_p2s.masked_fill(
-            torch.cat([s_pad, torch.zeros_like(s_pad[:, :1])], dim=1)[:, None, :], float("-inf")
-        )
-        return {"logits_s2p": logits_s2p, "logits_p2s": logits_p2s, "s_pad": s_pad, "p_pad": p_pad}
+        s_pad_col = torch.cat([s_pad, torch.zeros_like(s_pad[:, :1])], dim=1)[:, None, :]
+        logits_p2s = logits_p2s.masked_fill(s_pad_col, float("-inf"))
+
+        out = {"logits_s2p": logits_s2p, "logits_p2s": logits_p2s, "s_pad": s_pad, "p_pad": p_pad}
+
+        if self.cfg.attribution:
+            # (B, m, n+1); last column = "not an ornament".
+            attr = torch.einsum("bmd,bnd->bmn", self.attr_p(p_enc), self.attr_s(s_enc))
+            none_col = torch.einsum("bmd,d->bm", self.attr_p(p_enc), self.attr_none)[:, :, None]
+            logits_attr = torch.cat([attr, none_col], dim=2) * self.attr_scale
+            out["logits_attr"] = logits_attr.masked_fill(s_pad_col, float("-inf"))
+
+        return out
 
 
-def alignment_loss(out: dict, batch: dict) -> tuple[torch.Tensor, dict]:
+def alignment_loss(out: dict, batch: dict, weight_attr: float = 0.2) -> tuple[torch.Tensor, dict]:
     """Symmetric CE. Targets: batch['target_s'] (B, n_max) with perf index or
-    m (null) or -100 (pad); batch['target_p'] (B, m_max) likewise."""
+    m (null) or -100 (pad); batch['target_p'] (B, m_max) likewise.
+
+    When the model carries an attribution head, a third CE over
+    batch['target_attr'] (B, m_max: anchor score index, n_max = "not an
+    ornament", -100 = unsupervised) is added at `weight_attr`."""
     B, n_max, _ = out["logits_s2p"].shape
     m_max = out["logits_p2s"].shape[1]
 
@@ -198,4 +226,37 @@ def alignment_loss(out: dict, batch: dict) -> tuple[torch.Tensor, dict]:
         valid_p = batch["target_p"] != -100
         acc_p = ((pred_p == batch["target_p"]) & valid_p).sum() / valid_p.sum().clamp(min=1)
 
-    return loss, {"loss_s": loss_s.item(), "loss_p": loss_p.item(), "acc_s": acc_s.item(), "acc_p": acc_p.item()}
+    stats = {"loss_s": loss_s.item(), "loss_p": loss_p.item(),
+             "acc_s": acc_s.item(), "acc_p": acc_p.item()}
+
+    if "logits_attr" in out and "target_attr" in batch:
+        target_attr = batch["target_attr"]
+        n_max = out["logits_attr"].shape[2] - 1
+        sup = target_attr != -100
+        if bool(sup.any()):
+            # A batch can legitimately contain no supervised rows at all (a
+            # size bucket of only real-GT/self-supervised windows). Masked-out
+            # cross_entropy would then be 0/0 = nan and poison the weights, so
+            # the term is skipped rather than computed.
+            loss_attr = F.cross_entropy(
+                out["logits_attr"].reshape(B * m_max, -1),
+                target_attr.reshape(B * m_max),
+                ignore_index=-100,
+            )
+            loss = loss + weight_attr * loss_attr
+            with torch.no_grad():
+                pred_a = out["logits_attr"].argmax(-1)
+                hit = pred_a == target_attr
+                acc_attr = (hit & sup).sum() / sup.sum().clamp(min=1)
+                # The number that actually matters: of the played notes that
+                # ARE ornaments, how many got their principal right. Overall
+                # accuracy is dominated by the "none" class and looks great
+                # even for a head that never attributes anything.
+                is_orn = sup & (target_attr < n_max)
+                acc_orn = (hit & is_orn).sum() / is_orn.sum().clamp(min=1)
+            stats |= {"loss_attr": loss_attr.item(), "acc_attr": acc_attr.item(),
+                      "acc_attr_orn": acc_orn.item(), "n_attr_orn": int(is_orn.sum())}
+        else:
+            stats |= {"loss_attr": 0.0, "acc_attr": 0.0, "acc_attr_orn": 0.0, "n_attr_orn": 0}
+
+    return loss, stats

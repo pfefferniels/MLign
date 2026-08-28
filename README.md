@@ -104,7 +104,7 @@ Benchmarks (`eval/`) expect the ASAP, Vienna 4x22 and Batik datasets under
 `src/robustness/` performer-error layer with edit-log ground truth ·
 `scripts/corpus/` corpus generators (espressivo renders, self-supervised
 windows, real-GT windows) · `scripts/train.py` trainer · `eval/` benchmark
-harnesses and metrics · `slurm/` cluster job script · `models/mlign-v1.pt`
+harnesses and metrics · `slurm/` cluster job script · `models/mlign-v2.pt`
 the released model (= training run v5real, epoch 21).
 
 MIT. Built with the espressivo, mpmify and bwUniCluster teams; see

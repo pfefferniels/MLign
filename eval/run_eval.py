@@ -56,9 +56,16 @@ def make_model_aligner(ckpt_path: str):
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     cfg = ckpt.get("config", {})
+    # The attribution head is inferred from the weights, not the config: a
+    # checkpoint may predate `attribution` being recorded. It plays no part in
+    # alignment decoding — it is built only so the state dict loads strictly,
+    # which keeps a genuine architecture mismatch an error rather than a
+    # silently half-loaded model.
+    has_attr = any(k.startswith("attr_") for k in ckpt["model"])
     model = NoteAligner(ModelConfig(
         d_model=cfg.get("d_model", 192), n_layers=cfg.get("n_layers", 4),
         matchability=cfg.get("matchability", False),
+        attribution=cfg.get("attribution", has_attr),
     )).to(device)
     model.load_state_dict(ckpt["model"])
     model.eval()
