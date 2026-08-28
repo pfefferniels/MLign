@@ -90,6 +90,57 @@ def check_tensor_sweep(sess: ort.InferenceSession, wrapper: torch.nn.Module,
     return max(worst, scale_err)
 
 
+def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol: float) -> float:
+    """The sidecar's attribution formula against `NoteAligner.forward` itself.
+
+    The tensor sweep above proves the graph emits the right vectors; this proves
+    that the dot products the sidecar tells a host to take of them reconstruct
+    the head. It is the same distinction as (1) versus (2) for the match head,
+    and for the same reason: a host can hold correct vectors and still build the
+    wrong matrix out of them.
+    """
+    names = [o.name for o in sess.get_outputs()]
+    if "attr_s" not in names:
+        print("  (no attribution head in this graph)")
+        return 0.0
+
+    rng = np.random.default_rng(1)
+    worst = 0.0
+    for T in lengths:
+        feed = fake_batch(T, rng)
+        n = (T - 2) // 2
+        m = T - 2 - n
+
+        with torch.no_grad():
+            ref = model({
+                **{k: torch.from_numpy(v) for k, v in feed.items()},
+                "pad": torch.zeros((1, T), dtype=torch.bool),
+                "n_score": torch.tensor([n]),
+                "n_perf": torch.tensor([m]),
+            })["logits_attr"][0].numpy()
+
+        got = dict(zip(names, sess.run(None, feed)))
+        attr_s = got["attr_s"][0][1:1 + n]              # (n, d)
+        attr_p = got["attr_p"][0][2 + n:2 + n + m]      # (m, d)
+        rebuilt = np.concatenate(
+            [attr_p @ attr_s.T, (attr_p @ got["attr_none"])[:, None]], axis=1
+        ) * float(got["attr_scale"])
+
+        # Relative, like the accumulated-logit check and for the same reason:
+        # this is a matrix of 192-term dot products, so its entries are two
+        # orders of magnitude larger than the vectors they come from, and an
+        # absolute tolerance calibrated for the vectors would reject a graph
+        # whose every logit is right to four figures.
+        scale = max(1.0, float(np.abs(ref).max()))
+        adiff = float(np.abs(rebuilt - ref).max())
+        rel = adiff / scale
+        worst = max(worst, rel)
+        print(f"  T={T:5d}  |ref|max {scale:7.2f}  max|host-torch| {adiff:.3e}  "
+              f"relative {rel:.3e}  {'OK' if rel < tol else 'FAIL'}")
+
+    return worst
+
+
 def accumulate_logits_onnx(sess: ort.InferenceSession, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """`mlign.infer.accumulate_logits` with the model replaced by the session.
 
@@ -117,7 +168,12 @@ def accumulate_logits_onnx(sess: ort.InferenceSession, row: dict) -> tuple[np.nd
                 "cont": f["cont"][None],
                 "segment": f["segment"][None].astype(np.int64),
                 "position": f["position"][None].astype(np.int64)}
-        s_tok, p_tok, match_s, match_p, scale = sess.run(None, feed)
+        # Named, not positional: a graph carrying the attribution head returns
+        # four more tensors, and this is the path that does not want them. It is
+        # also how a host skips paying for them.
+        s_tok, p_tok, match_s, match_p, scale = sess.run(
+            ["s", "p", "match_s", "match_p", "scale"], feed
+        )
 
         # NoteAligner.forward, B=1, no padding: score tokens live at [1, 1+n),
         # perf tokens at [2+n, 2+n+m). The null logits come straight from the
@@ -235,6 +291,7 @@ def main() -> None:
     meta = json.loads(sidecar.read_text())
     assert meta["model"]["d_model"] == model.cfg.d_model, "sidecar d_model disagrees with the checkpoint"
     assert meta["model"]["matchability"] == model.cfg.matchability, "sidecar matchability disagrees"
+    assert meta["model"].get("attribution", False) == model.cfg.attribution, "sidecar attribution disagrees"
     assert abs(meta["head"]["scale"] - float(model.scale.detach())) < 1e-9, "sidecar scale disagrees"
     storage = meta["model"]["weight_storage"]
     tol = TOL[storage]
@@ -242,6 +299,9 @@ def main() -> None:
 
     print(f"\n[1] tensor sweep (tolerance {tol:g})")
     worst = check_tensor_sweep(sess, wrapper, args.lengths, tol)
+
+    print(f"\n[1b] attribution head, as the sidecar tells a host to rebuild it")
+    attr_worst = check_attribution(sess, model, args.lengths, tol)
 
     score = ScoreTable.from_musicxml(ROOT / args.score)
     perf = PerfTable.from_midi(ROOT / args.perf)
@@ -256,6 +316,7 @@ def main() -> None:
     logit_err_win, same_win = check_end_to_end(sess, model, score, perf, tol)
 
     logit_worst = max(logit_err, logit_err_win)
+    worst = max(worst, attr_worst)
     ok = worst < tol and logit_worst < tol and same and same_win
     print(f"\n{'PASS' if ok else 'FAIL'}: worst tensor diff {worst:.3e}, worst logit diff "
           f"{logit_worst:.3e} (both < {tol:g}); triples {'identical' if same else 'DIFFER'} "

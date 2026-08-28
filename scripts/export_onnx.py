@@ -43,7 +43,36 @@ from mlign.dataset import MARKER_PITCH  # noqa: E402
 from mlign.model import ModelConfig, NoteAligner  # noqa: E402
 
 INPUT_NAMES = ["pitch", "cont", "segment", "position"]
-OUTPUT_NAMES = ["s", "p", "match_s", "match_p", "scale"]
+# The per-token ones come first, because they are the ones with a dynamic axis.
+PER_TOKEN_OUTPUTS = ["s", "p", "match_s", "match_p"]
+OUTPUT_NAMES = [*PER_TOKEN_OUTPUTS, "scale"]
+# Appended, never inserted: a host written against the four-output graph keeps
+# working, and one that wants attribution asks for the extra names.
+ATTR_PER_TOKEN_OUTPUTS = ["attr_s", "attr_p"]
+ATTR_OUTPUT_NAMES = [*ATTR_PER_TOKEN_OUTPUTS, "attr_none", "attr_scale"]
+
+
+def output_names(cfg: ModelConfig) -> list[str]:
+    return OUTPUT_NAMES + (ATTR_OUTPUT_NAMES if cfg.attribution else [])
+
+
+def per_token_outputs(cfg: ModelConfig) -> list[str]:
+    return PER_TOKEN_OUTPUTS + (ATTR_PER_TOKEN_OUTPUTS if cfg.attribution else [])
+
+
+def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
+    """The attribution head, exported the way the match head is: the projected
+    vectors, not the (m, n) matrix they multiply out to.
+
+    Which is the whole reason it fits. The host already accumulates `sim` window
+    by window from `s` and `p`; giving it `attr_s` and `attr_p` lets it do the
+    identical thing for attribution with the identical bookkeeping. Emitting
+    `logits_attr` instead would mean a graph that knows where the score half
+    ends, and an (m, n) tensor per window on the wire.
+    """
+    if not model.cfg.attribution:
+        return ()
+    return (model.attr_s(x), model.attr_p(x), model.attr_none, model.attr_scale)
 
 
 class Enc(nn.Module):
@@ -67,6 +96,7 @@ class Enc(nn.Module):
             self.m.matchability_s(x),
             self.m.matchability_p(x),
             self.m.scale,
+            *attribution_outputs(self.m, x),
         )
 
 
@@ -85,7 +115,7 @@ class EncDustbin(nn.Module):
         s, p = self.m.out_s(x), self.m.out_p(x)
         null_col = (s @ self.m.null_p)[..., None] * self.m.scale
         null_row = (p @ self.m.null_s)[..., None] * self.m.scale
-        return s, p, null_col, null_row, self.m.scale
+        return s, p, null_col, null_row, self.m.scale, *attribution_outputs(self.m, x)
 
 
 def load_model(ckpt_path: Path) -> tuple[NoteAligner, dict]:  # (model, checkpoint)
@@ -173,6 +203,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
             "d_ff": cfg.d_ff,
             "max_rel": cfg.max_rel,
             "matchability": cfg.matchability,
+            "attribution": cfg.attribution,
         },
         "graph": {
             # Batch is pinned to 1 and padding is not modelled: the host runs
@@ -206,6 +237,16 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             else " — dustbin dot product, already scaled"))},
                 {"name": "scale", "dtype": "float32", "shape": [],
                  "doc": "the learned logit scale, identical to head.scale below"},
+                *([
+                    {"name": "attr_s", "dtype": "float32", "shape": [1, "T", cfg.d_model],
+                     "doc": "attr_s(encoder output) per token — the attribution head's score side"},
+                    {"name": "attr_p", "dtype": "float32", "shape": [1, "T", cfg.d_model],
+                     "doc": "attr_p(encoder output) per token — its perf side"},
+                    {"name": "attr_none", "dtype": "float32", "shape": [cfg.d_model],
+                     "doc": "the learned 'not an ornament' vector, constant per model"},
+                    {"name": "attr_scale", "dtype": "float32", "shape": [],
+                     "doc": "the attribution head's own logit scale, separate from `scale`"},
+                ] if cfg.attribution else []),
             ],
         },
         "featurize": {
@@ -258,6 +299,29 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
             # with matchability=True the graph emits the null logits directly.
             "null_s": None if cfg.matchability else [float(v) for v in model.null_s.detach()],
             "null_p": None if cfg.matchability else [float(v) for v in model.null_p.detach()],
+            # A second p->s distribution, answering a different question from
+            # `sim`: not "which written note is this played note" but "which
+            # written note does it ornament". Deliberately its own bilinear map -
+            # the match head is trained to send an ornament note to the null
+            # column, so the same score cannot rank both.
+            "attribution": None if not cfg.attribution else {
+                "attr_scale": float(model.attr_scale.detach()),
+                "attr": "attr[j][i] = dot(attr_p[2 + n + j], attr_s[1 + i]) * attr_scale   # (m, n)",
+                "attr_none_col": "none[j] = dot(attr_p[2 + n + j], attr_none) * attr_scale  # (m,)",
+                "logits_attr": "concat([attr, none[:, None]], axis=1)             # (m, n + 1)",
+                "read_as": ("argmax over each row: the written note this played note ornaments, "
+                            "or the last column for 'not an ornament'. Softmax over the row gives "
+                            "a usable confidence."),
+                "accumulate": ("exactly as `sim` is accumulated, and with the same window "
+                               "bookkeeping: attr += the window's block, then divide by the "
+                               "window count. The none column averages the same way."),
+                "supervision": ("trained only on espressivo-rendered rows, where ornament "
+                                "provenance is exhaustive. It has never been asked about a real "
+                                "trill with a known answer, because no corpus annotates one."),
+                "optional": ("the two per-token attribution outputs double the bytes a window "
+                             "returns. A host that does not want them can name only the outputs "
+                             "it needs when it runs the session."),
+            },
         },
         "host": {
             # mlign.infer constants the TypeScript decode has to match.
@@ -331,8 +395,8 @@ def main() -> None:
     t0 = time.time()
     torch.onnx.export(
         wrapper, example, str(out_path), opset_version=args.opset, dynamo=False,
-        input_names=INPUT_NAMES, output_names=OUTPUT_NAMES,
-        dynamic_axes={k: {1: "T"} for k in INPUT_NAMES + OUTPUT_NAMES[:4]},
+        input_names=INPUT_NAMES, output_names=output_names(model.cfg),
+        dynamic_axes={k: {1: "T"} for k in INPUT_NAMES + per_token_outputs(model.cfg)},
     )
     print(f"exported in {time.time() - t0:.1f}s")
 

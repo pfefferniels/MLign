@@ -12,7 +12,8 @@
     "n_heads": 4,
     "d_ff": 512,
     "max_rel": 64,
-    "matchability": true
+    "matchability": true,
+    "attribution": true
   },
   "graph": {
     "batch": 1,
@@ -105,6 +106,40 @@
         "dtype": "float32",
         "shape": [],
         "doc": "the learned logit scale, identical to head.scale below"
+      },
+      {
+        "name": "attr_s",
+        "dtype": "float32",
+        "shape": [
+          1,
+          "T",
+          192
+        ],
+        "doc": "attr_s(encoder output) per token \u2014 the attribution head's score side"
+      },
+      {
+        "name": "attr_p",
+        "dtype": "float32",
+        "shape": [
+          1,
+          "T",
+          192
+        ],
+        "doc": "attr_p(encoder output) per token \u2014 its perf side"
+      },
+      {
+        "name": "attr_none",
+        "dtype": "float32",
+        "shape": [
+          192
+        ],
+        "doc": "the learned 'not an ornament' vector, constant per model"
+      },
+      {
+        "name": "attr_scale",
+        "dtype": "float32",
+        "shape": [],
+        "doc": "the attribution head's own logit scale, separate from `scale`"
       }
     ]
   },
@@ -170,7 +205,17 @@
     "logits_p2s": "concat([sim.T, null_row[:, None]], axis=1)        # (m, n + 1)",
     "matchability_applies_to": "the encoder output BEFORE out_s/out_p \u2014 the graph already does this, so the host must NOT re-derive the null logits from s/p",
     "null_s": null,
-    "null_p": null
+    "null_p": null,
+    "attribution": {
+      "attr_scale": 0.41390684247016907,
+      "attr": "attr[j][i] = dot(attr_p[2 + n + j], attr_s[1 + i]) * attr_scale   # (m, n)",
+      "attr_none_col": "none[j] = dot(attr_p[2 + n + j], attr_none) * attr_scale  # (m,)",
+      "logits_attr": "concat([attr, none[:, None]], axis=1)             # (m, n + 1)",
+      "read_as": "argmax over each row: the written note this played note ornaments, or the last column for 'not an ornament'. Softmax over the row gives a usable confidence.",
+      "accumulate": "exactly as `sim` is accumulated, and with the same window bookkeeping: attr += the window's block, then divide by the window count. The none column averages the same way.",
+      "supervision": "trained only on espressivo-rendered rows, where ornament provenance is exhaustive. It has never been asked about a real trill with a known answer, because no corpus annotates one.",
+      "optional": "the two per-token attribution outputs double the bytes a window returns. A host that does not want them can name only the outputs it needs when it runs the session."
+    }
   },
   "host": {
     "max_single_tokens": 2000,
