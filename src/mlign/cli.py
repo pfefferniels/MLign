@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import * as esp from %(dist)s;
 const mei = readFileSync(process.argv[2], 'utf8');
 const keep = console.log; console.log = () => {}; console.error = () => {};
-const movements = esp.convertMeiToMsmMpm(mei);
+const movements = esp.convertMeiToMsm(mei);
 const { msm } = movements[%(mdiv)d];
 const data = esp.extractScoreData ? esp.extractScoreData(msm) : null;
 console.log = keep;

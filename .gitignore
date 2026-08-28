@@ -10,3 +10,6 @@ venv/
 # agent working notes (kept locally, not published)
 notes/
 notes/*.sh
+
+# golden fixtures: 33 MB of regenerable float32 blobs (scripts/make_golden.py)
+test/golden/

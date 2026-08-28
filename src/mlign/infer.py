@@ -21,6 +21,7 @@ from .tables import PerfTable, ScoreTable
 MAX_SINGLE_TOKENS = 2000
 WIN_SCORE = 384  # score notes per window
 MARGIN_SEC = 3.0
+UNCOVERED_NULL = 1e9  # null logit for a note no window covered
 
 
 def tables_to_row(score: ScoreTable, perf: PerfTable) -> dict:
@@ -88,8 +89,8 @@ def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.nda
     null_s = null_s / np.maximum(null_s_cnt, 1.0)
     null_p = null_p / np.maximum(null_p_cnt, 1.0)
     # notes never covered by any window: strongly "unmatched"
-    null_s[null_s_cnt == 0] = 1e9
-    null_p[null_p_cnt == 0] = 1e9
+    null_s[null_s_cnt == 0] = UNCOVERED_NULL
+    null_p[null_p_cnt == 0] = UNCOVERED_NULL
     return sim, null_s, null_p
 
 
@@ -191,6 +192,16 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
     # (median ~25ms but locally skewed under heavy rubato → off-by-one shifts
     # inside repeated-pitch runs); round 2's map interpolates the dense round-1
     # matches, which pins those runs.
+    #
+    # A performed note no window covered carries the UNCOVERED_NULL sentinel and
+    # an all-zero confidence column, so the DP below scores it on |expected −
+    # actual| alone and can pair it on time proximity — emitting a match at
+    # confidence 0.0 for a note the model never saw. coarse_windows covers every
+    # score note structurally but not every performed one (a window's perf range
+    # is its anchors' span widened by MARGIN_SEC), so lead-in noise, tuning or a
+    # stray tail lands here. Such notes are insertions by construction.
+    covered_p = null_p < UNCOVERED_NULL
+
     matched_s = np.full(n, -1, dtype=int)
     matched_p = np.full(m, -1, dtype=int)
     for _round in range(2):
@@ -199,7 +210,7 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
         pitches, counts = np.unique(s_pitch, return_counts=True)
         for pitch in pitches[np.argsort(counts)]:
             si = np.flatnonzero((s_pitch == pitch) & (matched_s == -1))
-            pj = np.flatnonzero((p_pitch == pitch) & (matched_p == -1))
+            pj = np.flatnonzero((p_pitch == pitch) & (matched_p == -1) & covered_p)
             if len(si) == 0 or len(pj) == 0:
                 continue
             exp = s2p_time(s_onset[si])
@@ -230,7 +241,7 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
     # insertion+deletion would double-count one mistake. Greedy nearest-first.
     RESCUE_SEC = 0.35
     res_s = [i for i in range(n) if matched_s[i] < 0]
-    res_p = [j for j in range(m) if matched_p[j] < 0]
+    res_p = [j for j in range(m) if matched_p[j] < 0 and covered_p[j]]
     by_pitch_p: dict[int, list[int]] = {}
     for j in res_p:
         by_pitch_p.setdefault(int(p_pitch[j]), []).append(j)
