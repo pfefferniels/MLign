@@ -50,26 +50,61 @@ OUTPUT_NAMES = [*PER_TOKEN_OUTPUTS, "scale"]
 # working, and one that wants attribution asks for the extra names.
 ATTR_PER_TOKEN_OUTPUTS = ["attr_s", "attr_p"]
 ATTR_OUTPUT_NAMES = [*ATTR_PER_TOKEN_OUTPUTS, "attr_none", "attr_scale"]
-# The same rule one level down: a conditioned checkpoint adds its one extra
-# tensor after the whole attribution block, so a host written against the v2
+# The same rule one level down: a conditioned checkpoint adds its extra tensors
+# after the whole attribution block, so a host written against the v2
 # attribution contract reads the same names at the same positions. Which is
 # also why `attr_gate` trails the non-dynamic `attr_none`/`attr_scale` instead
 # of joining the per-token group at the front.
-COND_OUTPUT_NAMES = {"bias": ["attr_cond_w"], "factored": ["attr_gate"]}
-COND_PER_TOKEN_OUTPUTS = {"factored": ["attr_gate"]}
+#
+# `residual` extends `factored` the same way `factored` extended v2: it keeps
+# `attr_gate` where it was and appends its own tensor after it, so a host that
+# only knows `factored` reads a residual graph's gate correctly — which is
+# exactly why it must not be allowed to stop there. See `mode_from_outputs`.
+COND_OUTPUT_NAMES = {
+    "bias": ["attr_cond_w"],
+    "factored": ["attr_gate"],
+    "residual": ["attr_gate", "attr_override"],
+}
+COND_PER_TOKEN_OUTPUTS = {
+    "factored": ["attr_gate"],
+    "residual": ["attr_gate", "attr_override"],
+}
+
+
+def _check_mode(cfg: ModelConfig) -> str:
+    """Refuse a conditioning mode this exporter has no contract for.
+
+    Silence here is the dangerous failure. Every lookup below is a `.get(mode,
+    [])`, so an unrecognised mode exports a graph that is missing the tensors
+    its own row is built from while the sidecar still announces the mode by
+    name — a host would detect the absent output, fall back to the mode one
+    step down, and read a row that means something else. Loudly refusing to
+    export beats shipping a graph that is wrong only in its numbers.
+    """
+    mode = cfg.attr_conditioned
+    if cfg.attribution and mode and mode not in COND_OUTPUT_NAMES:
+        raise SystemExit(
+            f"export_onnx: attr_conditioned={mode!r} has no export contract. "
+            f"Known: {sorted(COND_OUTPUT_NAMES)}. Add its outputs to "
+            "COND_OUTPUT_NAMES/COND_PER_TOKEN_OUTPUTS, its tensors to "
+            "attribution_outputs(), its row to the sidecar's "
+            "head.attribution.conditioned, and its branch to "
+            "test_onnx_parity.rebuild_logits_attr — then re-run the parity check."
+        )
+    return mode
 
 
 def output_names(cfg: ModelConfig) -> list[str]:
     if not cfg.attribution:
         return list(OUTPUT_NAMES)
-    return OUTPUT_NAMES + ATTR_OUTPUT_NAMES + COND_OUTPUT_NAMES.get(cfg.attr_conditioned, [])
+    return OUTPUT_NAMES + ATTR_OUTPUT_NAMES + COND_OUTPUT_NAMES.get(_check_mode(cfg), [])
 
 
 def per_token_outputs(cfg: ModelConfig) -> list[str]:
     if not cfg.attribution:
         return list(PER_TOKEN_OUTPUTS)
     return (PER_TOKEN_OUTPUTS + ATTR_PER_TOKEN_OUTPUTS
-            + COND_PER_TOKEN_OUTPUTS.get(cfg.attr_conditioned, []))
+            + COND_PER_TOKEN_OUTPUTS.get(_check_mode(cfg), []))
 
 
 def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
@@ -91,10 +126,17 @@ def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
     if not model.cfg.attribution:
         return ()
     out = (model.attr_s(x), model.attr_p(x), model.attr_none, model.attr_scale)
-    if model.cfg.attr_conditioned == "bias":
+    mode = _check_mode(model.cfg)
+    if mode == "bias":
         return (*out, model.attr_cond_w)
-    if model.cfg.attr_conditioned == "factored":
+    if mode == "factored":
         return (*out, model.attr_gate(x))
+    if mode == "residual":
+        # Both projections, raw. The override is a second per-token logit and
+        # nothing else: like the gate, what it multiplies is the host's own
+        # match evidence, so the graph can no more compute its effect than it
+        # can compute `log_ins`.
+        return (*out, model.attr_gate(x), model.attr_override(x))
     return out
 
 
@@ -144,9 +186,13 @@ class EncDustbin(nn.Module):
 def conditioning_from_state(state: dict) -> str:
     """Which `attr_conditioned` mode a state dict was trained with.
 
-    For checkpoints whose saved config predates the flag. The two modes own
-    disjoint parameters and neither is optional within its mode, so the weights
-    answer this outright."""
+    For checkpoints whose saved config predates the flag. Each mode owns a
+    parameter that is not optional within it, so the weights answer this
+    outright — but `residual` is a superset of `factored` and carries a gate
+    too, so it has to be asked about first or it would answer `factored` and
+    export a graph missing the override."""
+    if any(k.startswith("attr_override.") for k in state):
+        return "residual"
     if any(k.startswith("attr_gate.") for k in state):
         return "factored"
     return "bias" if "attr_cond_w" in state else ""
@@ -294,7 +340,13 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                      "doc": "attr_gate(encoder output) per token — the logit of "
                             "P(this insertion elaborates a written note); "
                             "see head.attribution.conditioned"},
-                ] if cfg.attribution and cfg.attr_conditioned == "factored" else []),
+                ] if cfg.attribution and cfg.attr_conditioned in ("factored", "residual") else []),
+                *([
+                    {"name": "attr_override", "dtype": "float32", "shape": [1, "T", 1],
+                     "doc": "attr_override(encoder output) per token — the logit of the "
+                            "share of P(matched) the attribution head is allowed to claim "
+                            "back from the match head; see head.attribution.conditioned"},
+                ] if cfg.attribution and cfg.attr_conditioned == "residual" else []),
             ],
         },
         "featurize": {
@@ -363,9 +415,9 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                 "read_as": ("argmax over each row: the written note this played note ornaments, "
                             "or the last column for 'not an ornament'. Softmax over the row gives "
                             "a usable confidence."
-                            + ("" if cfg.attr_conditioned != "factored" else
-                               " — except in 'factored' mode, where the row is already normalized; "
-                               "see conditioned.already_normalized")),
+                            + ("" if cfg.attr_conditioned not in ("factored", "residual") else
+                               f" — except in {cfg.attr_conditioned!r} mode, where the row is "
+                               "already normalized; see conditioned.already_normalized")),
                 "accumulate": ("exactly as `sim` is accumulated, and with the same window "
                                "bookkeeping: attr += the window's block, then divide by the "
                                "window count. The none column averages the same way."
@@ -406,7 +458,9 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                         "head puts an unbounded term into the row."),
                     "when": (
                         "ONCE, after window accumulation, on the full rows: accumulate "
-                        "attr / none" + (" / gate" if cfg.attr_conditioned == "factored" else "")
+                        "attr / none"
+                        + (" / gate" if cfg.attr_conditioned == "factored" else "")
+                        + (" / gate / override" if cfg.attr_conditioned == "residual" else "")
                         + " exactly as above, then apply this to the averaged result. It is a "
                         "nonlinear function of the whole p->s row, so averaging conditioned "
                         "windows is not the same thing."),
@@ -423,19 +477,36 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             "Still unnormalized logits: softmax the row for a confidence."),
                     } if cfg.attr_conditioned == "bias" else {
                         "gate": "gate[j] = attr_gate[2 + n + j][0]   # (m,), read at the PERF tokens",
+                        **({} if cfg.attr_conditioned != "residual" else {
+                            "override": ("over[j] = attr_override[2 + n + j][0]   # (m,), read at "
+                                         "the PERF tokens"),
+                        }),
                         "logits_attr": (
                             "the whole row is rebuilt, and `none` (the attr_none dot product) is "
                             "NOT part of it — attr_none stays in the output list only so the "
                             "attribution block keeps its shape:\n"
                             "  log_rank[j][i] = attr[j][i] - logsumexp(attr[j][0:n])   # (m, n)\n"
-                            "  row[j][i] = log_ins[j] + logsigmoid(gate[j]) + log_rank[j][i]\n"
-                            "  row[j][n] = logaddexp(log_ins[j] + logsigmoid(-gate[j]), "
-                            "log_matched[j])\n"
-                            "with logsigmoid(x) = -log1p(exp(-x)) and "
-                            "logaddexp(a, b) = max(a, b) + log1p(exp(-|a - b|)).\n"
-                            "Reads as P(anchor = i) = P(insertion) * P(attributable | insertion) "
-                            "* P(i | attributable); the none column collects both ways of not "
-                            "being an ornament — matched, or an unattributable insertion."),
+                            + ("  ins[j], rest[j] = log_ins[j], log_matched[j]\n"
+                               if cfg.attr_conditioned == "factored" else
+                               "  ins[j]  = logaddexp(log_ins[j], log_matched[j] + "
+                               "logsigmoid(over[j]))\n"
+                               "  rest[j] = log_matched[j] + logsigmoid(-over[j])\n")
+                            + "  row[j][i] = ins[j] + logsigmoid(gate[j]) + log_rank[j][i]\n"
+                              "  row[j][n] = logaddexp(ins[j] + logsigmoid(-gate[j]), rest[j])\n"
+                              "with logsigmoid(x) = -log1p(exp(-x)) and "
+                              "logaddexp(a, b) = max(a, b) + log1p(exp(-|a - b|)).\n"
+                              "Reads as P(anchor = i) = P(insertion) * P(attributable | insertion) "
+                              "* P(i | attributable); the none column collects both ways of not "
+                              "being an ornament — matched, or an unattributable insertion."
+                            + ("" if cfg.attr_conditioned == "factored" else
+                               "\n`residual` differs in `ins` alone: a learned share of the "
+                               "MATCHED mass moves into the insertion branch, so attribution can "
+                               "still name an ornament where the match head believes the note "
+                               "matched something — the one case `factored` structurally cannot "
+                               "reach. What is left of that mass stays in the none column, so the "
+                               "row remains a distribution: ins + rest = P(ins) + P(matched) = 1. "
+                               "attr_override is initialised at -4, which makes an untrained "
+                               "residual head very nearly `factored`.")),
                         "already_normalized": (
                             "the row IS a log-distribution over the n + 1 options: exp() it for a "
                             "confidence, do NOT softmax it again. Softmaxing would discard exactly "

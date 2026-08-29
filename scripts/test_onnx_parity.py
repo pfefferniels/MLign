@@ -134,13 +134,24 @@ def rebuild_logits_attr(got: dict[str, np.ndarray], n: int, m: int) -> np.ndarra
     if "attr_cond_w" in got:
         return np.concatenate(
             [row[:, :-1], row[:, -1:] + float(got["attr_cond_w"]) * log_matched], axis=1)
-    # "factored": the learned none column is unused, and the result is already
-    # a log-distribution rather than logits.
+    # "factored" / "residual": the learned none column is unused, and the result
+    # is already a log-distribution rather than logits.
     rank = row[:, :-1]
     gate = got["attr_gate"][0, 2 + n:2 + n + m]     # (m, 1)
+
+    ins, rest = log_ins, log_matched
+    if "attr_override" in got:
+        # "residual". The only difference, and it is entirely in these two lines:
+        # a learned share of the matched mass is moved into the insertion branch,
+        # and the remainder of it stays in the none column, so the row is still a
+        # distribution.
+        over = got["attr_override"][0, 2 + n:2 + n + m]     # (m, 1)
+        ins = np.logaddexp(log_ins, log_matched + _logsigmoid(over))
+        rest = log_matched + _logsigmoid(-over)
+
     return np.concatenate(
-        [log_ins + _logsigmoid(gate) + rank - _logsumexp(rank),
-         np.logaddexp(log_ins + _logsigmoid(-gate), log_matched)], axis=1)
+        [ins + _logsigmoid(gate) + rank - _logsumexp(rank),
+         np.logaddexp(ins + _logsigmoid(-gate), rest)], axis=1)
 
 
 def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol: float) -> float:
@@ -160,7 +171,11 @@ def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol
     if "attr_s" not in names:
         print("  (no attribution head in this graph)")
         return 0.0
-    mode = "factored" if "attr_gate" in names else ("bias" if "attr_cond_w" in names else "")
+    # `residual` carries a gate too, so it has to be asked about before
+    # `factored` — the same ordering trap as `conditioning_from_state`.
+    mode = ("residual" if "attr_override" in names else
+            "factored" if "attr_gate" in names else
+            "bias" if "attr_cond_w" in names else "")
     print(f"  attr_conditioned={mode!r}"
           + (" — logits_attr rebuilt from BOTH heads" if mode else ""))
 
