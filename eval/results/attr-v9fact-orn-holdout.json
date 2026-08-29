@@ -7,7 +7,16 @@
   "attr_n": 8144,
   "group_exact": 0.566,
   "group_n": 4005,
-  "ckpt": "runs/v9fact/best.pt",
+  "by_match_head": {
+    "flagged_acc": 0.8126,
+    "flagged_n": 7316,
+    "vetoed_acc": 0.0,
+    "vetoed_n": 828,
+    "veto_share": 0.1017,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2954
+  },
+  "ckpt": "models/mlign-v3.pt",
   "corpus": "data/corpus/orn-holdout.jsonl",
   "tier": "synthetic-only"
 }
