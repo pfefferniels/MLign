@@ -7,6 +7,15 @@
   "attr_n": 3047,
   "group_exact": 0.033,
   "group_n": 787,
+  "by_match_head": {
+    "flagged_acc": 0.129,
+    "flagged_n": 2783,
+    "vetoed_acc": 0.0303,
+    "vetoed_n": 264,
+    "veto_share": 0.0866,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2697
+  },
   "ckpt": "models/mlign-v2.pt",
   "corpus": "data/corpus/realorn-asap.jsonl",
   "tier": "real-recording"

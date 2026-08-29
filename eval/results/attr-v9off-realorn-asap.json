@@ -7,6 +7,15 @@
   "attr_n": 3047,
   "group_exact": 0.3075,
   "group_n": 787,
+  "by_match_head": {
+    "flagged_acc": 0.6001,
+    "flagged_n": 2866,
+    "vetoed_acc": 0.2044,
+    "vetoed_n": 181,
+    "veto_share": 0.0594,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2007
+  },
   "ckpt": "runs/v9off/best.pt",
   "corpus": "data/corpus/realorn-asap.jsonl",
   "tier": "real-recording"

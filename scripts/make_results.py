@@ -59,23 +59,35 @@ d = load("dualdtw-robust-test.json"); g = load("gluenote-robust-test.json")
 m21 = load("v5real-e021-robust-test.json"); m23 = load("v5real-e023-robust-test.json")
 v2 = load("v8early-e030-robust-test.json"); v7 = load("v7attr-e022-robust-test.json")
 m3 = load("mlign-v3-robust-test.json"); m5 = load("v5real-e005-robust-test.json")
+# `models/mlign-v3.pt` is the run named v9fact. The older `mlign-v3-robust-test`
+# above is a different thing entirely — the day-2 training run that happened to
+# be called v3 — and the two must not be conflated in a table.
+v3f = load("v9fact-robust-test.json"); v9o = load("v9off-robust-test.json")
 out.append("## 1. Headline: nASAP robust test split (untouched holdout)\n")
 out.append("84 performances / 27 pieces: nASAP alignments flagged robust ∩ MAESTRO-v2 test pieces\n"
            "(`eval/split.py`). No training, self-supervision, selection or dev data touches these\n"
            "pieces (all self-sup/real-GT corpora exclude the folders).\n")
 out.append("| system | match F | ins F | del F | n |\n|---|---|---|---|---|")
-if v2: out.append(row("**MLign v2** (`models/mlign-v2.pt` = v8early epoch 30, attribution head)", v2, bold=True))
+if v3f: out.append(row("**MLign v3** (`models/mlign-v3.pt` = v9fact, conditioned attribution head)", v3f, bold=True))
+if v9o: out.append(row("MLign v9off (v3's corpus, unconditioned head — the alignment high-water mark)", v9o))
+if v2: out.append(row("MLign v2 (`models/mlign-v2.pt` = v8early epoch 30)", v2))
 if v7: out.append(row("MLign v7attr epoch 22 (attribution, pre-early-corpus)", v7))
 if m21: out.append(row("MLign v1 (`models/mlign-v1.pt` = v5real epoch 21)", m21))
 if m23: out.append(row("MLign v5real epoch 23 (confirmation)", m23))
 if d: out.append(row("DualDTW (parangonar 3.1.0, hand-tuned SOTA)", d))
 if g: out.append(row("TheGlueNote (parangonar 3.1.0, ISMIR 2024)", g))
-if m3: out.append(row("MLign v3 (pre-real-selection)", m3))
+if m3: out.append(row("MLign v3-the-run (day 2, unrelated to `mlign-v3.pt`)", m3))
 if m5: out.append(row("MLign v5real epoch 5 (dev-4x22 record — the wrong pick)", m5))
-if v2 and d:
-    w, t, l, p = paired(v2, d)
-    out.append(f"\nPaired per-performance, MLign v2 vs DualDTW: **{w} wins / {t} ties / {l} losses**, "
+if v3f and d:
+    w, t, l, p = paired(v3f, d)
+    out.append(f"\nPaired per-performance, MLign v3 vs DualDTW: **{w} wins / {t} ties / {l} losses**, "
                f"one-sided sign test p = {p:.2e}.")
+if v3f and v2:
+    w, t, l, p = paired(v3f, v2)
+    out.append(f"MLign v3 vs MLign v2: {w} wins / {t} ties / {l} losses, p = {p:.2f} — **a tie, and "
+               f"reported as one.** v3 is not a better aligner than v2; it is the same aligner with "
+               f"an ornament head that works on real recordings (§6). The alignment number is here "
+               f"to show that the head was not paid for out of it.")
 if v2 and m21:
     w, t, l, p = paired(v2, m21)
     out.append(f"MLign v2 vs MLign v1: **{w} wins / {t} ties / {l} losses**, "
@@ -143,7 +155,98 @@ out.append("\nIn-run measurement (v5real log): dedicated real val loss bottoms a
            "was calibrated to rank checkpoints like the holdout does (v3 > v5-e5), where 4x22 ranked\n"
            "them backwards; it is the primary local selector going forward.\n")
 
-# ---- 6. dev-long table
+# ---- 6. ornament attribution
+#
+# The models are named by training run, not by version, because three of the
+# four never shipped: v9off/v9bias/v9fact are one corpus trained with three
+# settings of the same flag, and v9fact is what `models/mlign-v3.pt` is.
+ATTR_MODELS = [("v2", "v2"), ("v9off", "v9off"),
+               ("v9bias", "v9bias"), ("v9fact", "**v3** (=v9fact)")]
+# The three that differ in ONE flag on ONE corpus, so a ranking among them is
+# about the flag and nothing else. v2 is a different corpus and belongs in the
+# table but not in that comparison.
+V9 = ["v9off", "v9bias", "v9fact"]
+SYNTH = [("early-holdout", "early-holdout"), ("shift-holdout", "shift-holdout"),
+         ("orn-holdout", "orn-holdout"), ("orn-shift-holdout", "orn-shift-holdout"),
+         ("asap-orn-holdout", "asap-orn-holdout (real scores, rendered)")]
+REAL = [("realorn-batik", "**realorn-batik**"), ("realorn-asap", "**realorn-asap**")]
+
+attr = {(t, c): load(f"attr-{t}-{c}.json") for t, _ in ATTR_MODELS for c, _ in SYNTH + REAL}
+if any(attr.values()):
+    out.append("\n## 6. Ornament attribution — which written note a played note decorates\n")
+    out.append("A capability no other aligner in this field offers: every one of them returns a\n"
+               "trill's eleven notes as one match and ten insertions belonging to nothing. Metric:\n"
+               "**group-exact** — the share of ornament figures whose notes *all* land on the right\n"
+               "principal, since a figure with one stray note is not a usable group\n"
+               "(`eval/run_attribution.py`).\n")
+    out.append("The split below is the whole point, and it is a methodological result as much as a\n"
+               "model one. The first five holdouts are renders of MLign's **own generator**, so they\n"
+               "measure how well a model learned that generator. The last two are ground truth\n"
+               "derived from Nakamura match files on **real recordings** — ASAP and Batik put the\n"
+               "ornament sign in the score note's attribute list, with the played notes following as\n"
+               "`insertion-note` lines (`scripts/corpus/real_orn_gt.py`). They disagree, and the\n"
+               "real ones are the ones that count.\n")
+    out.append("| holdout | " + " | ".join(lbl for _, lbl in ATTR_MODELS) + " |")
+    out.append("|---" * (len(ATTR_MODELS) + 1) + "|")
+    for c, clbl in SYNTH + REAL:
+        cells = []
+        for t, _ in ATTR_MODELS:
+            r = attr.get((t, c))
+            cells.append(f"{r['group_exact']:.4f}" if r else "—")
+        out.append(f"| {clbl} | " + " | ".join(cells) + " |")
+    # Asserted from the numbers, not from memory of them: the claim this section
+    # rests on is exactly "a synthetic dev set picks the other model", so it is
+    # worth being unable to overstate it.
+    def best_of_v9(c):
+        have = {t: attr[(t, c)]["group_exact"] for t in V9 if attr.get((t, c))}
+        return max(have, key=have.get) if have else None
+
+    syn_win = [best_of_v9(c) for c, _ in SYNTH]
+    real_win = [best_of_v9(c) for c, _ in REAL]
+    if all(w == "v9off" for w in syn_win) and all(w == "v9fact" for w in real_win):
+        margins = " and ".join(
+            f"+{attr[('v9fact', c)]['group_exact'] - attr[('v9off', c)]['group_exact']:.3f}"
+            for c, _ in REAL if attr.get(("v9fact", c)) and attr.get(("v9off", c)))
+        out.append(f"\nThe three v9 rows differ in one flag on one corpus, so ranking them is about\n"
+                   f"the flag alone. **Every synthetic holdout puts v9off first. Both real ones put\n"
+                   f"v3 first, by {margins}.** A synthetic dev set would have selected the other\n"
+                   f"model — the same lesson this project already learned for alignment (§5),\n"
+                   f"arrived at independently for attribution.\n")
+    out.append("\nThe old holdouts drop on purpose: they measure a generator that put 141.8 ornament\n"
+               "groups per 1000 notes into every piece and no grace notes anywhere, against real\n"
+               "ASAP's 8.53 events per 1000 sounding notes. Reading v2's 0.8291 on `early-holdout`\n"
+               "as the better number is the exact mistake this table exists to prevent: on real\n"
+               "recordings that same model scores 0.0203.\n")
+
+    # The veto table: only rows whose JSON carries the split (real holdouts).
+    veto = [(t, lbl, c, clbl, attr[(t, c)]["by_match_head"])
+            for t, lbl in ATTR_MODELS for c, clbl in REAL
+            if attr.get((t, c)) and "by_match_head" in attr[(t, c)]]
+    if veto:
+        out.append("\n### What conditioning buys, and what it costs\n")
+        out.append("True ornament notes split by what the **match head** said about each: `flagged`\n"
+                   "= it called the note an insertion, `vetoed` = it thought the note matched a\n"
+                   "written one. A conditioned head can only be as right as that verdict lets it be\n"
+                   "(`--by-match-head`).\n")
+        out.append("| model | holdout | flagged | n | vetoed | n | veto share |")
+        out.append("|---|---|---|---|---|---|---|")
+        for t, lbl, c, clbl, b in veto:
+            out.append(f"| {lbl} | {clbl} | {b['flagged_acc']:.4f} | {b['flagged_n']} | "
+                       f"{b['vetoed_acc']:.4f} | {b['vetoed_n']} | {b['veto_share']:.2%} |")
+        out.append("\nv3's `.0000` on the vetoed notes is **structural, not underfit**: for such a note\n"
+                   "the ornament side of the row is bounded by `log P(insertion)`, which is below\n"
+                   "`log P(matched)`, so the argmax cannot reach a score note however long it trains.\n"
+                   "That is the price of conditioning — 8–13 % of ornament notes — and it buys .8455\n"
+                   "against v2's .2292 on the notes the match head gets right. The unconditioned v2\n"
+                   "keeps a small chance at the vetoed ones (8.9 % on Batik), which is a real if\n"
+                   "narrow coverage regression in v3 and is stated here rather than buried.\n")
+        floored = {b["log_ins_floored"] for _, _, _, _, b in veto}
+        if floored == {0.0}:
+            out.append("`log P(insertion)` never reaches the `LOG_FLOOR` clamp on any true ornament\n"
+                       "note, in any cell of this table — so the clamp is not quietly setting a\n"
+                       "downstream confidence threshold; the model is.\n")
+
+# ---- 7. dev-long table
 out.append("\n### dev-long tier (train-split, never test)\n")
 out.append("| checkpoint | match F | ins F | del F |\n|---|---|---|---|")
 for name in ["v3", "v5e5", "v6e10", "v6e023", "v6e024", "v6e025"]:

@@ -1,6 +1,6 @@
 """`mlign serve` — a tiny local HTTP server for the browser test page.
 
-    PYTHONPATH=src python -m mlign.serve [--port 8765] [--ckpt models/mlign-v2.pt]
+    PYTHONPATH=src python -m mlign.serve [--port 8765] [--ckpt models/mlign-v3.pt]
 
 Serves web/index.html at / and accepts POST /align (multipart: `score` = .mei
 or .musicxml file, `performance` = .mid file). Returns JSON:
@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="mlign serve")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "models/mlign-v2.pt")))
+    ap.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "models/mlign-v3.pt")))
     args = ap.parse_args(argv)
     global ALIGNER
     ALIGNER = Aligner(args.ckpt)

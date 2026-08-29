@@ -7,6 +7,15 @@
   "attr_n": 4130,
   "group_exact": 0.1919,
   "group_n": 740,
+  "by_match_head": {
+    "flagged_acc": 0.8455,
+    "flagged_n": 3605,
+    "vetoed_acc": 0.0,
+    "vetoed_n": 525,
+    "veto_share": 0.1271,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.4085
+  },
   "ckpt": "runs/v9fact/best.pt",
   "corpus": "data/corpus/realorn-batik.jsonl",
   "tier": "real-recording"

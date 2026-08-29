@@ -14,16 +14,19 @@ pieces (all self-sup/real-GT corpora exclude the folders).
 
 | system | match F | ins F | del F | n |
 |---|---|---|---|---|
-| **MLign v2** (`models/mlign-v2.pt` = v8early epoch 30, attribution head) | **0.9895 ± 0.0164** | 0.9485 | 0.9036 | 84 |
+| **MLign v3** (`models/mlign-v3.pt` = v9fact, conditioned attribution head) | **0.9896 ± 0.0165** | 0.9524 | 0.8913 | 84 |
+| MLign v9off (v3's corpus, unconditioned head — the alignment high-water mark) | 0.9901 ± 0.0155 | 0.9549 | 0.9015 | 84 |
+| MLign v2 (`models/mlign-v2.pt` = v8early epoch 30) | 0.9895 ± 0.0164 | 0.9485 | 0.9036 | 84 |
 | MLign v7attr epoch 22 (attribution, pre-early-corpus) | 0.9899 ± 0.0156 | 0.9532 | 0.9006 | 84 |
 | MLign v1 (`models/mlign-v1.pt` = v5real epoch 21) | 0.9878 ± 0.0174 | 0.9448 | 0.8772 | 84 |
 | MLign v5real epoch 23 (confirmation) | 0.9874 ± 0.0181 | 0.9419 | 0.8776 | 84 |
 | DualDTW (parangonar 3.1.0, hand-tuned SOTA) | 0.9852 ± 0.0170 | 0.9225 | 0.8237 | 84 |
 | TheGlueNote (parangonar 3.1.0, ISMIR 2024) | 0.9778 ± 0.0245 | 0.8206 | 0.8148 | 84 |
-| MLign v3 (pre-real-selection) | 0.9833 ± 0.0201 | 0.9271 | 0.7901 | 84 |
+| MLign v3-the-run (day 2, unrelated to `mlign-v3.pt`) | 0.9833 ± 0.0201 | 0.9271 | 0.7901 | 84 |
 | MLign v5real epoch 5 (dev-4x22 record — the wrong pick) | 0.9799 ± 0.0246 | 0.9261 | 0.7680 | 84 |
 
-Paired per-performance, MLign v2 vs DualDTW: **69 wins / 3 ties / 12 losses**, one-sided sign test p = 3.52e-11.
+Paired per-performance, MLign v3 vs DualDTW: **68 wins / 3 ties / 13 losses**, one-sided sign test p = 1.90e-10.
+MLign v3 vs MLign v2: 35 wins / 18 ties / 31 losses, p = 0.36 — **a tie, and reported as one.** v3 is not a better aligner than v2; it is the same aligner with an ornament head that works on real recordings (§6). The alignment number is here to show that the head was not paid for out of it.
 MLign v2 vs MLign v1: **57 wins / 13 ties / 14 losses**, one-sided sign test p = 1.33e-07.
 Epoch-23 confirmation vs DualDTW: 63W / 4T / 17L, p = 1.13e-07 — the result is robust to snapshot choice within the real-validation-selected region.
 
@@ -90,6 +93,77 @@ criterion keeps improving monotonically to epoch 29 — the two criteria part co
 epoch 23. `eval/run_devlong.py` (20 long, deletion-heavy train-split sonata movements)
 was calibrated to rank checkpoints like the holdout does (v3 > v5-e5), where 4x22 ranked
 them backwards; it is the primary local selector going forward.
+
+
+## 6. Ornament attribution — which written note a played note decorates
+
+A capability no other aligner in this field offers: every one of them returns a
+trill's eleven notes as one match and ten insertions belonging to nothing. Metric:
+**group-exact** — the share of ornament figures whose notes *all* land on the right
+principal, since a figure with one stray note is not a usable group
+(`eval/run_attribution.py`).
+
+The split below is the whole point, and it is a methodological result as much as a
+model one. The first five holdouts are renders of MLign's **own generator**, so they
+measure how well a model learned that generator. The last two are ground truth
+derived from Nakamura match files on **real recordings** — ASAP and Batik put the
+ornament sign in the score note's attribute list, with the played notes following as
+`insertion-note` lines (`scripts/corpus/real_orn_gt.py`). They disagree, and the
+real ones are the ones that count.
+
+| holdout | v2 | v9off | v9bias | **v3** (=v9fact) |
+|---|---|---|---|---|
+| early-holdout | 0.8291 | 0.7094 | 0.6277 | 0.6530 |
+| shift-holdout | 0.7014 | 0.5137 | 0.4225 | 0.4417 |
+| orn-holdout | 0.2664 | 0.6262 | 0.5503 | 0.5660 |
+| orn-shift-holdout | 0.2628 | 0.5884 | 0.5094 | 0.5171 |
+| asap-orn-holdout (real scores, rendered) | 0.2463 | 0.5062 | 0.4743 | 0.4519 |
+| **realorn-batik** | 0.0203 | 0.1216 | 0.0216 | 0.1919 |
+| **realorn-asap** | 0.0330 | 0.3075 | 0.2236 | 0.5133 |
+
+The three v9 rows differ in one flag on one corpus, so ranking them is about
+the flag alone. **Every synthetic holdout puts v9off first. Both real ones put
+v3 first, by +0.070 and +0.206.** A synthetic dev set would have selected the other
+model — the same lesson this project already learned for alignment (§5),
+arrived at independently for attribution.
+
+
+The old holdouts drop on purpose: they measure a generator that put 141.8 ornament
+groups per 1000 notes into every piece and no grace notes anywhere, against real
+ASAP's 8.53 events per 1000 sounding notes. Reading v2's 0.8291 on `early-holdout`
+as the better number is the exact mistake this table exists to prevent: on real
+recordings that same model scores 0.0203.
+
+
+### What conditioning buys, and what it costs
+
+True ornament notes split by what the **match head** said about each: `flagged`
+= it called the note an insertion, `vetoed` = it thought the note matched a
+written one. A conditioned head can only be as right as that verdict lets it be
+(`--by-match-head`).
+
+| model | holdout | flagged | n | vetoed | n | veto share |
+|---|---|---|---|---|---|---|
+| v2 | **realorn-batik** | 0.2292 | 3669 | 0.0889 | 461 | 11.16% |
+| v2 | **realorn-asap** | 0.1290 | 2783 | 0.0303 | 264 | 8.66% |
+| v9off | **realorn-batik** | 0.7222 | 3704 | 0.0493 | 426 | 10.31% |
+| v9off | **realorn-asap** | 0.6001 | 2866 | 0.2044 | 181 | 5.94% |
+| v9bias | **realorn-batik** | 0.5086 | 3563 | 0.0000 | 567 | 13.73% |
+| v9bias | **realorn-asap** | 0.4805 | 2774 | 0.0147 | 273 | 8.96% |
+| **v3** (=v9fact) | **realorn-batik** | 0.8455 | 3605 | 0.0000 | 525 | 12.71% |
+| **v3** (=v9fact) | **realorn-asap** | 0.8173 | 2797 | 0.0000 | 250 | 8.20% |
+
+v3's `.0000` on the vetoed notes is **structural, not underfit**: for such a note
+the ornament side of the row is bounded by `log P(insertion)`, which is below
+`log P(matched)`, so the argmax cannot reach a score note however long it trains.
+That is the price of conditioning — 8–13 % of ornament notes — and it buys .8455
+against v2's .2292 on the notes the match head gets right. The unconditioned v2
+keeps a small chance at the vetoed ones (8.9 % on Batik), which is a real if
+narrow coverage regression in v3 and is stated here rather than buried.
+
+`log P(insertion)` never reaches the `LOG_FLOOR` clamp on any true ornament
+note, in any cell of this table — so the clamp is not quietly setting a
+downstream confidence threshold; the model is.
 
 
 ### dev-long tier (train-split, never test)

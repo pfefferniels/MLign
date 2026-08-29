@@ -17,7 +17,7 @@ learned `scale`. `scripts/test_onnx_parity.py` is what proves it.
 
 Usage:
   PYTHONPATH=src .venv/bin/python scripts/export_onnx.py \
-      --ckpt models/mlign-v2.pt --out models/mlign-v2.onnx
+      --ckpt models/mlign-v3.pt --out models/mlign-v3.onnx
 """
 
 from __future__ import annotations
@@ -59,7 +59,10 @@ ATTR_OUTPUT_NAMES = [*ATTR_PER_TOKEN_OUTPUTS, "attr_none", "attr_scale"]
 # `residual` extends `factored` the same way `factored` extended v2: it keeps
 # `attr_gate` where it was and appends its own tensor after it, so a host that
 # only knows `factored` reads a residual graph's gate correctly — which is
-# exactly why it must not be allowed to stop there. See `mode_from_outputs`.
+# exactly why a host must test for `attr_override` FIRST. `residual` is a
+# superset, so asking about the gate first answers `factored` for both; both
+# `conditioning_from_state` below and `test_onnx_parity.check_attribution`
+# order their checks that way.
 COND_OUTPUT_NAMES = {
     "bias": ["attr_cond_w"],
     "factored": ["attr_gate"],
@@ -548,8 +551,8 @@ def summarize(onnx_model: onnx.ModelProto, path: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--ckpt", default="models/mlign-v2.pt")
-    ap.add_argument("--out", default="models/mlign-v2.onnx")
+    ap.add_argument("--ckpt", default="models/mlign-v3.pt")
+    ap.add_argument("--out", default="models/mlign-v3.onnx")
     ap.add_argument("--opset", type=int, default=17)
     ap.add_argument("--fp16", action="store_true",
                     help="store large weights as float16 + Cast (halves the download; compute stays fp32)")

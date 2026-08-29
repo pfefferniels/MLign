@@ -7,12 +7,14 @@ as extra, each decision with a confidence. Learned end-to-end, trained largely
 on synthetic expressive performances with exact ground truth.
 
 On the held-out nASAP test split (84 performances the model never saw in any
-form) MLign v2 reaches **0.9895 ± 0.0164** match-F against **0.9852** for
+form) MLign v3 reaches **0.9896 ± 0.0165** match-F against **0.9852** for
 DualDTW (parangonar 3.1.0), the strongest published system we could run; paired
-per performance, 69 wins / 3 ties / 12 losses. The margin is small and does not
-carry over automatically — on Batik-plays-Mozart the two are at parity. Numbers,
-protocols and negative results: [`docs/RESULTS.md`](docs/RESULTS.md),
-[`docs/DESIGN.md`](docs/DESIGN.md).
+per performance, 68 wins / 3 ties / 13 losses. The margin is small and does not
+carry over automatically — on Batik-plays-Mozart the two are at parity. On
+alignment v3 ties its own predecessor v2 (35W / 18T / 31L, p = 0.36); what it
+adds is an ornament-attribution head that works on real recordings rather than
+only on our own renders. Numbers, protocols and negative results:
+[`docs/RESULTS.md`](docs/RESULTS.md), [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## What this builds on
 
@@ -48,15 +50,21 @@ The problem, the datasets, the metric and the baselines are other people's work.
   `xml:id`; a performer-error layer (wrong notes, slips, restarts, skipped
   passages) logs its edits as further ground truth. Labels no corruption of
   MIDI can produce, at the cost of a distribution we choose rather than observe.
-- **Ornament attribution** (v2). A second head asks, per performed note, which
+- **Ornament attribution** (v3). A second head asks, per performed note, which
   written note it elaborates; otherwise a trill is one match and ten loose
-  insertions. partitura's match format has had the slot since v1.0.0
-  (`ornament(Anchor,Type)`), but no corpus we know of fills it — zero such lines
-  across ASAP's 1063 match files, 4x22's 88 and Batik's 36. The espressivo
-  renders are therefore the only ground truth available, and the head is trained
-  and evaluated on synthetic data alone, never against prior work
-  (`eval/run_attribution.py`). The alignment output is unchanged: ornament notes
-  are still emitted as insertions, as the benchmark scores them.
+  insertions. Training supervision is synthetic — espressivo renders, where
+  provenance is exhaustive — but the evaluation is not. partitura's
+  `ornament(Anchor,Type)` slot is indeed empty in every corpus we have (zero
+  such lines across ASAP's 1063 match files, 4x22's 88 and Batik's 36), which
+  we long read as "no real ground truth exists". That was wrong: ASAP and Batik
+  put the ornament sign in the **score note's own attribute list**, with the
+  played notes following as `insertion-note` lines, and 1527 real ornament
+  groups can be recovered from them (`scripts/corpus/real_orn_gt.py`). Measured
+  there, v3 gets 19.2 % / 51.3 % of figures exactly right against v2's 2.0 % /
+  3.3 % — a 9.5× and 15.6× gain that no synthetic holdout could see, since
+  those rank the models the other way round (`docs/RESULTS.md` §6). The
+  alignment output is unchanged: ornament notes are still emitted as
+  insertions, as the benchmark scores them.
 - **Real music decides which checkpoint ships.** Training mixes real material
   (self-supervised and real-ground-truth windows from the nASAP training pieces)
   with the synthetic corpus, and checkpoints are selected on a real-music
@@ -79,7 +87,7 @@ monotone time map, then assigns notes per pitch.
 ## Use
 
 ```bash
-# align (json | match | jsonl); models/mlign-v2.pt is the default checkpoint
+# align (json | match | jsonl); models/mlign-v3.pt is the default checkpoint
 PYTHONPATH=src python -m mlign.cli align score.mei performance.mid --format match -o out.match
 
 # interactive test page at http://127.0.0.1:8765/
@@ -91,7 +99,7 @@ PYTHONPATH=src python -m mlign.serve
 MusicXML input and the released model need only `torch`, `numpy` and
 `partitura`; MEI input needs a built espressivo (path in `src/mlign/cli.py`).
 Benchmarks (`eval/`) expect ASAP, Vienna 4x22 and Batik under
-`data/benchmarks/`. For inference outside Python, `models/mlign-v2.onnx` (plus a
+`data/benchmarks/`. For inference outside Python, `models/mlign-v3.onnx` (plus a
 3.3 MB fp16 build) exports the encoder and all three heads with a JSON sidecar
 describing every tensor; [`docs/DECODE-CONTRACT.md`](docs/DECODE-CONTRACT.md)
 specifies the decoding around it for a browser port.
@@ -101,7 +109,8 @@ specifies the decoding around it for a browser port.
 `src/mlign/` model, inference, CLI, server, MEI export, repeat inference ·
 `src/robustness/` performer-error layer · `scripts/` corpus generators, trainer,
 ONNX export · `eval/` benchmark harnesses and metrics · `slurm/` cluster job ·
-`models/mlign-v2.pt` the released model (run v8early, epoch 30, with
-attribution), `models/mlign-v1.pt` the previous one (v5real, epoch 21).
+`models/mlign-v3.pt` the released model (run v9fact, epoch 20, conditioned
+attribution), `models/mlign-v2.pt` (v8early, epoch 30) and `models/mlign-v1.pt`
+(v5real, epoch 21) the previous ones.
 
 MIT. Built with the espressivo, mpmify and bwUniCluster teams.
