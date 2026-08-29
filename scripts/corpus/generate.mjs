@@ -22,7 +22,8 @@
  * invariant are dropped (counted in the final summary line on stderr).
  */
 
-import { appendFileSync, openSync, closeSync, writeSync } from 'node:fs';
+import { appendFileSync, openSync, closeSync, writeSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 // The score/MPM samplers moved out of mpmify into their own repo (mpmify
 // f79697e "Remove ml/: fenby is its own repository now"); mpmify/ml/node/ is
 // gone, and these paths followed it there.
@@ -424,6 +425,41 @@ export function buildSample(piece, robustnessCfg, seedStr, ornDefs = null, exagF
   };
 }
 
+/**
+ * Write `<out>.recipe.json`: the argv that produced this shard, the resolved
+ * options, and the commit the generator was at.
+ *
+ * A sidecar rather than a field on every row, because the row-level cost is not
+ * free — 40 000 rows x ~150 bytes is ~6 MB of the same sentence — and because
+ * the question it answers ("how do I regenerate this?") is asked of the file,
+ * not of a row. Written BEFORE the loop, so an interrupted shard still says
+ * what it was trying to be.
+ */
+function writeRecipe(args) {
+  let commit = null;
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'],
+                          { cwd: new URL('../..', import.meta.url).pathname,
+                            encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch { /* not a checkout, or no git: the argv below is still the point */ }
+
+  const recipe = {
+    schema: 'mlign-corpus-recipe/1',
+    generator: 'scripts/corpus/generate.mjs',
+    // The reproduction command, verbatim and runnable.
+    argv: process.argv.slice(1).join(' '),
+    options: args,
+    commit,
+    written: new Date().toISOString(),
+  };
+  const path = `${args.out}.recipe.json`;
+  // `seed` is a BigInt (the sampler needs the width); JSON.stringify throws on
+  // one rather than coercing, so it is rendered as the digits it is.
+  const json = JSON.stringify(recipe, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
+  writeFileSync(path, json + '\n');
+  process.stderr.write(`recipe: ${path}\n`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.exaggerate) await loadExaggeration();
@@ -448,6 +484,20 @@ async function main() {
     },
     ...(args.addRate === null ? {} : { add: { ...preset.add, rate: args.addRate } }),
   });
+
+  // How this shard was made, beside the shard itself.
+  //
+  // `data/` is gitignored, so a corpus carries no provenance a repo can hold:
+  // `meta.seed` on every row pins the sampler but says nothing about the flags,
+  // and those flags ARE the corpus — `--breadth 2 --imprecision natural` and
+  // `--breadth 3 --imprecision early` are what make orn-a and orn-b different
+  // shards rather than two draws of one. Regenerating "the same corpus with one
+  // thing changed" is impossible without them, and reconstructing them from
+  // memory silently flattens exactly the axis they vary.
+  //
+  // Once cost me an afternoon: the only surviving record of how orn-a/orn-b and
+  // their holdouts were generated was a chat transcript. Not again.
+  writeRecipe(args);
 
   // Synchronous writes: the generation loop is pure sync compute and never
   // yields to the event loop, so a stream would buffer EVERYTHING in memory

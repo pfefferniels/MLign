@@ -34,7 +34,8 @@
  * Output: notes/corpus-format.md rows, `meta.gen = "mlign-real-v1"`.
  */
 
-import { openSync, closeSync, writeSync, readFileSync } from 'node:fs';
+import { openSync, closeSync, writeSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { JavaRandom } from '/Users/nielspfeffer/Projects/fenby/node/java_random.mjs';
 import {
   PPQ,
@@ -388,6 +389,35 @@ function* windows(take, win, stride, spec, seedStr) {
 
 let exagMod = null;
 
+/**
+ * Write `<out>.recipe.json` — the same contract as `generate.mjs`'s, for the
+ * same reason: `data/` is gitignored, so without this a shard's flags survive
+ * only in whatever shell scrollback happened to be kept. See that file.
+ */
+function writeRecipe(args) {
+  let commit = null;
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'],
+                          { cwd: new URL('../..', import.meta.url).pathname,
+                            encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch { /* not a checkout, or no git */ }
+
+  const recipe = {
+    schema: 'mlign-corpus-recipe/1',
+    generator: 'scripts/corpus/generate_real.mjs',
+    argv: process.argv.slice(1).join(' '),
+    options: args,
+    commit,
+    written: new Date().toISOString(),
+  };
+  const path = `${args.out}.recipe.json`;
+  // `seed` is a BigInt (the sampler needs the width); JSON.stringify throws on
+  // one rather than coercing, so it is rendered as the digits it is.
+  const json = JSON.stringify(recipe, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2);
+  writeFileSync(path, json + '\n');
+  process.stderr.write(`recipe: ${path}\n`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.exaggerate) exagMod = await loadExaggeration();
@@ -430,6 +460,8 @@ async function main() {
   });
   if (specs.length !== before)
     process.stderr.write(`${before - specs.length} of ${before} scores skipped\n`);
+
+  writeRecipe(args);
 
   const fd = openSync(args.out, 'w');
   let written = 0;
