@@ -62,11 +62,20 @@ def load_model(ckpt_path: str, device: str) -> NoteAligner:
     return model.to(device).eval()
 
 
-def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: bool = False) -> dict:
+def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: bool = False,
+             by_match_head: bool = False) -> dict:
     det_tp = det_fp = det_fn = 0
     attr_hit = attr_tot = 0
     groups_exact = groups_tot = 0
     rows_seen = 0
+    # The veto diagnostic: true ornament notes split by what the MATCH head said
+    # about them, because a conditioned head can only be as right as that verdict
+    # lets it be. `flagged` = the match head called it an insertion, `vetoed` =
+    # it thought the note matched a written one. Under `factored` the vetoed
+    # column is structurally 0, and recovering it is the whole point of
+    # `residual` — so this is the number that decides whether that worked.
+    split = {"flagged_hit": 0, "flagged_n": 0, "vetoed_hit": 0, "vetoed_n": 0,
+             "floored": 0, "log_ins_sum": 0.0}
 
     for start in range(0, len(rows), batch):
         chunk = [featurize(parse_row(r), real_orn=real_orn) for r in rows[start : start + batch]]
@@ -74,11 +83,21 @@ def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: 
         if "target_attr" not in b:
             continue
         with torch.no_grad():
-            logits = model(b)["logits_attr"]
+            out = model(b)
+            logits = out["logits_attr"]
             # width BEFORE argmax collapses it: (B, m_max, n_max + 1), and the
             # "not an ornament" class is the last column, at n_max
             none_idx = logits.shape[-1] - 1
             pred = logits.argmax(-1).cpu()
+            if by_match_head:
+                # The same last-column convention, and the same index: padded
+                # score columns are already -inf, so the argmax is safe as-is.
+                p2s = out["logits_p2s"]
+                said_ins = (p2s.argmax(-1) == none_idx).cpu()
+                # The model's own clamp, not a re-derivation — if `log_ins`
+                # piles up at the floor then the clamp, not the head, is what a
+                # downstream confidence threshold is really reading.
+                log_ins = model._match_evidence(p2s)[0].squeeze(-1).cpu()
         target = b["target_attr"].cpu()
 
         for i in range(len(chunk)):
@@ -101,6 +120,17 @@ def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: 
             attr_hit += int(hit.sum())
             attr_tot += int(t_orn.sum())
 
+            if by_match_head:
+                ins_i = said_ins[i, :m]
+                flagged, vetoed = t_orn & ins_i, t_orn & ~ins_i
+                split["flagged_n"] += int(flagged.sum())
+                split["vetoed_n"] += int(vetoed.sum())
+                split["flagged_hit"] += int((hit & flagged).sum())
+                split["vetoed_hit"] += int((hit & vetoed).sum())
+                li = log_ins[i, :m][t_orn]
+                split["floored"] += int((li <= NoteAligner.LOG_FLOOR + 1e-6).sum())
+                split["log_ins_sum"] += float(li.sum())
+
             # figure-level: group the true ornament notes by their anchor
             by_anchor: dict[int, list[int]] = collections.defaultdict(list)
             for j in torch.nonzero(t_orn).flatten().tolist():
@@ -112,7 +142,7 @@ def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: 
 
     prec = det_tp / max(det_tp + det_fp, 1)
     rec = det_tp / max(det_tp + det_fn, 1)
-    return {
+    res = {
         "rows": rows_seen,
         "detect_p": round(prec, 4),
         "detect_r": round(rec, 4),
@@ -122,6 +152,19 @@ def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: 
         "group_exact": round(groups_exact / max(groups_tot, 1), 4),
         "group_n": groups_tot,
     }
+    if by_match_head:
+        res["by_match_head"] = {
+            "flagged_acc": round(split["flagged_hit"] / max(split["flagged_n"], 1), 4),
+            "flagged_n": split["flagged_n"],
+            # 0.0 here for `factored` by construction; anything above it is
+            # `residual` doing the one thing it was added to do.
+            "vetoed_acc": round(split["vetoed_hit"] / max(split["vetoed_n"], 1), 4),
+            "vetoed_n": split["vetoed_n"],
+            "veto_share": round(split["vetoed_n"] / max(attr_tot, 1), 4),
+            "log_ins_floored": round(split["floored"] / max(attr_tot, 1), 4),
+            "log_ins_mean": round(split["log_ins_sum"] / max(attr_tot, 1), 4),
+        }
+    return res
 
 
 def main() -> None:
@@ -137,6 +180,13 @@ def main() -> None:
                          "Nakamura match files on REAL recordings. Their labels are partial "
                          "(an unattributed insertion means unresolved, not 'not an ornament'), "
                          "so those notes are ignored rather than counted against the model")
+    ap.add_argument("--by-match-head", action="store_true",
+                    help="split the true ornament notes by what the MATCH head said about "
+                         "each, and report how much of log P(insertion) sits on the clamp. "
+                         "A conditioned head can only be as right as that verdict lets it "
+                         "be: `factored` scores 0 on the notes the match head thought were "
+                         "matched, ~12.7 %% of all ornament notes on real Batik, and that "
+                         "veto is what `residual` exists to break")
     args = ap.parse_args()
 
     rows = [l for l in open(args.corpus, "rb") if l.strip()]
@@ -160,7 +210,7 @@ def main() -> None:
         )
 
     res = evaluate(load_model(args.ckpt, args.device), provenanced, args.device, args.batch,
-                   real_orn=args.real_orn)
+                   real_orn=args.real_orn, by_match_head=args.by_match_head)
     res |= {"ckpt": args.ckpt, "corpus": args.corpus,
             "tier": "real-recording" if args.real_orn else "synthetic-only"}
     print(json.dumps(res, indent=2))
