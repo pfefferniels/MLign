@@ -62,6 +62,16 @@ class ModelConfig:
     #                unconditioned head recovers 4.9 % of them. This keeps
     #                factored's win where the match head is right (84.5 % vs
     #                72.2 %) and reopens the door where it is wrong.
+    #                MEASURED (v10res): it does not work. The override trains
+    #                but converges to sigmoid ~.0008 on the vetoed notes, BELOW
+    #                its value where it is inert, because raising it costs the
+    #                ~100x more numerous matched notes. Kept for reproducibility.
+    #   "evidenced" — residual, with the override additionally priced by the
+    #                head's OWN ranking margin (top1 - top2 over score notes,
+    #                detached). Overriding is then cheap only where the head is
+    #                sure WHICH note is ornamented and stays at zero where the
+    #                ranking is flat, which is what makes the majority class
+    #                stop paying for the parameter.
     # The match-head term is always DETACHED: alignment must stay unable to
     # feel the attribution loss, which is what kept the head strictly additive.
     attr_conditioned: str = ""
@@ -91,7 +101,13 @@ def config_from_ckpt(cfg: dict | None, state: dict | None = None, **overrides) -
         attribution = has("attr_")
     conditioned = cfg.get("attr_conditioned")
     if not conditioned:
-        conditioned = ("residual" if has("attr_override") else "factored" if has("attr_gate")
+        # Most specific first: `evidenced` is `residual` plus one scalar, and
+        # `residual` is `factored` plus the override, so asking in the other
+        # order answers with the mode one step down and loads strictly into a
+        # model missing a parameter.
+        conditioned = ("evidenced" if "attr_override_margin" in keys
+                       else "residual" if has("attr_override")
+                       else "factored" if has("attr_gate")
                        else "bias" if "attr_cond_w" in keys else "")
     fields = {
         "d_model": int(cfg.get("d_model", 192)),
@@ -110,6 +126,36 @@ def _logaddexp(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     their callers, so `a - b` is never nan."""
     m = torch.maximum(a, b)
     return m + torch.log1p(torch.exp(-(a - b).abs()))
+
+
+# How far the top-ranked score note leads the runner-up, in log space: the
+# attribution head's own confidence about WHICH note is ornamented, as distinct
+# from whether anything is. Bounded on both sides so it can be a model input.
+RANK_MARGIN_MAX = 20.0
+
+
+def _rank_margin(log_rank: torch.Tensor) -> torch.Tensor:
+    """(B, m, n) log-distribution -> (B, m, 1) top1 - top2, detached.
+
+    Detached on purpose: `evidenced` lets the override READ the ranking as
+    evidence, and a gradient path back would let it sharpen the ranking to buy
+    itself room — the same reason every match-head term in this file is
+    detached.
+
+    Padded score columns arrive as -inf. With fewer than two real candidates the
+    runner-up is -inf and the margin would be +inf, so it is clamped; a row with
+    one candidate is "maximally confident" by construction and the clamp says
+    exactly that without producing a non-finite input.
+    """
+    lr = log_rank.detach()
+    if lr.shape[-1] < 2:
+        return torch.full_like(lr[..., :1], RANK_MARGIN_MAX)
+    top2 = lr.topk(2, dim=-1).values
+    margin = top2[..., 0:1] - top2[..., 1:2]
+    # nan_to_num before clamp: (-inf) - (-inf) is nan, which clamp propagates.
+    return torch.nan_to_num(margin, nan=RANK_MARGIN_MAX, posinf=RANK_MARGIN_MAX).clamp(
+        min=0.0, max=RANK_MARGIN_MAX
+    )
 
 
 class RelPosBias(nn.Module):
@@ -193,18 +239,26 @@ class NoteAligner(nn.Module):
             self.attr_scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
             if cfg.attr_conditioned == "bias":
                 self.attr_cond_w = nn.Parameter(torch.tensor(1.0))
-            elif cfg.attr_conditioned in ("factored", "residual"):
+            elif cfg.attr_conditioned in ("factored", "residual", "evidenced"):
                 # P(attributable | insertion): not every insertion elaborates a
                 # written note — slips and repeat restarts do not — so the
                 # factorization needs this third factor to stay honest.
                 self.attr_gate = nn.Linear(cfg.d_model, 1)
-                if cfg.attr_conditioned == "residual":
+                if cfg.attr_conditioned in ("residual", "evidenced"):
                     # P(this is an ornament anyway | the match head says matched).
                     # Initialised strongly negative so the run starts as plain
                     # `factored` and has to earn every override.
                     self.attr_override = nn.Linear(cfg.d_model, 1)
                     nn.init.zeros_(self.attr_override.weight)
                     nn.init.constant_(self.attr_override.bias, -4.0)
+                if cfg.attr_conditioned == "evidenced":
+                    # One scalar: how much the head's OWN ranking margin is
+                    # allowed to buy an override. Kept as a separate parameter
+                    # rather than an extra input column so the whole term stays
+                    # exportable — the host cannot recompute `attr_override`
+                    # from a graph output if the margin is baked into it, but
+                    # it can add `w · margin` itself. See export_onnx.
+                    self.attr_override_margin = nn.Parameter(torch.tensor(0.0))
             elif cfg.attr_conditioned:
                 raise ValueError(f"unknown attr_conditioned mode: {cfg.attr_conditioned!r}")
 
@@ -307,14 +361,38 @@ class NoteAligner(nn.Module):
         log_rank = rank - torch.logsumexp(rank, dim=-1, keepdim=True)
         gate = self.attr_gate(p_enc)
         log_rest = log_matched
-        if self.cfg.attr_conditioned == "residual":
+        if self.cfg.attr_conditioned in ("residual", "evidenced"):
             # Move a learned share of the MATCHED mass back into play, so a
             # played note can be an ornament even where the match head thinks it
             # matched something. Stays a proper distribution: the two branches
             # below still sum to P(ins) + P(matched) = 1.
-            over = F.logsigmoid(self.attr_override(p_enc))
+            over_logit = self.attr_override(p_enc)
+            if self.cfg.attr_conditioned == "evidenced":
+                # `residual` priced itself out. Measured on v10res, its override
+                # reached sigmoid .0008 on the very notes it exists for, an
+                # order of magnitude BELOW its value on notes where it is inert
+                # — because raising it costs the majority class. For a genuinely
+                # matched note the target IS the none column, and lifting the
+                # override moves mass out of `log_rest` (all of which lands
+                # there) into `log_ins` (only `sigmoid(-gate)` of which returns).
+                # Matched notes outnumber vetoed ornament notes ~100:1, so that
+                # penalty wins everywhere and the override never fires.
+                #
+                # So make the bid conditional on the head's OWN evidence, which
+                # is what a residual path was supposed to be: `margin` is how
+                # far the top-ranked score note leads the runner-up, in log
+                # space. It is large only where the head is sure WHICH note is
+                # being ornamented and near zero where the ranking is flat — so
+                # an override is cheap exactly on the recoverable notes and
+                # stays free at zero on the matched ones that used to veto it.
+                #
+                # DETACHED, like every other match-head term here: the override
+                # reads the ranking as evidence and must not be able to sharpen
+                # it to buy itself room.
+                over_logit = over_logit + self.attr_override_margin * _rank_margin(log_rank)
+            over = F.logsigmoid(over_logit)
             log_ins = _logaddexp(log_ins, log_matched + over)
-            log_rest = log_matched + F.logsigmoid(-self.attr_override(p_enc))
+            log_rest = log_matched + F.logsigmoid(-over_logit)
         return torch.cat(
             [log_ins + F.logsigmoid(gate) + log_rank,
              _logaddexp(log_ins + F.logsigmoid(-gate), log_rest)],

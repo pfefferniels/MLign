@@ -57,12 +57,17 @@ def main() -> None:
                     help="train the ornament-attribution head (needs espressivo-rendered "
                          "rows; other sources are ignored by the head's loss)")
     ap.add_argument("--attr-weight", type=float, default=0.2)
-    ap.add_argument("--attr-conditioned", default="", choices=["", "bias", "factored", "residual"],
+    ap.add_argument("--attr-conditioned", default="",
+                    choices=["", "bias", "factored", "residual", "evidenced"],
                     help="let the attribution head read the match head's (detached) "
                          "insertion decision instead of re-deriving it: 'bias' adds "
                          "log P(matched) to the none column, 'factored' rebuilds the "
                          "whole distribution as P(ins)·P(attributable|ins)·P(anchor), "
-                         "'residual' adds a learned override so it can still disagree")
+                         "'residual' adds a learned override so it can still disagree "
+                         "(measured: it does not — the override is priced out by the "
+                         "~100x more numerous matched notes), 'evidenced' prices that "
+                         "override by the head's own ranking margin so overriding is "
+                         "cheap only where it is confident WHICH note is ornamented")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()

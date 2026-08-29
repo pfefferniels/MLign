@@ -42,7 +42,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from export_onnx import INPUT_NAMES, Enc, EncDustbin, load_model  # noqa: E402
 from mlign.dataset import MARKER_PITCH, featurize  # noqa: E402
 from mlign import infer  # noqa: E402
-from mlign.model import NoteAligner  # noqa: E402
+from mlign.model import RANK_MARGIN_MAX, NoteAligner  # noqa: E402
 from mlign.tables import PerfTable, ScoreTable  # noqa: E402
 
 # fp32 weights round-trip to ~1e-5; --fp16 weight storage costs ~2e-3 on the
@@ -137,10 +137,24 @@ def rebuild_logits_attr(got: dict[str, np.ndarray], n: int, m: int) -> np.ndarra
     # "factored" / "residual": the learned none column is unused, and the result
     # is already a log-distribution rather than logits.
     rank = row[:, :-1]
+    log_rank = rank - _logsumexp(rank)
     gate = got["attr_gate"][0, 2 + n:2 + n + m]     # (m, 1)
 
     ins, rest = log_ins, log_matched
-    if "attr_override" in got:
+    if "attr_override_margin" in got:
+        # "evidenced": the override is priced by the head's own ranking margin,
+        # computed from the ACCUMULATED ranking (here one window, so the full
+        # row) and clamped exactly as the model clamps it.
+        part = np.sort(log_rank, axis=-1)[:, ::-1]
+        margin = (part[:, 0:1] - part[:, 1:2]) if rank.shape[-1] > 1 else np.full(
+            (rank.shape[0], 1), RANK_MARGIN_MAX)
+        margin = np.clip(np.nan_to_num(margin, nan=RANK_MARGIN_MAX, posinf=RANK_MARGIN_MAX),
+                         0.0, RANK_MARGIN_MAX)
+        over_logit = (got["attr_override"][0, 2 + n:2 + n + m]
+                      + float(got["attr_override_margin"]) * margin)
+        ins = np.logaddexp(log_ins, log_matched + _logsigmoid(over_logit))
+        rest = log_matched + _logsigmoid(-over_logit)
+    elif "attr_override" in got:
         # "residual". The only difference, and it is entirely in these two lines:
         # a learned share of the matched mass is moved into the insertion branch,
         # and the remainder of it stays in the none column, so the row is still a
@@ -173,7 +187,8 @@ def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol
         return 0.0
     # `residual` carries a gate too, so it has to be asked about before
     # `factored` — the same ordering trap as `conditioning_from_state`.
-    mode = ("residual" if "attr_override" in names else
+    mode = ("evidenced" if "attr_override_margin" in names else
+            "residual" if "attr_override" in names else
             "factored" if "attr_gate" in names else
             "bias" if "attr_cond_w" in names else "")
     print(f"  attr_conditioned={mode!r}"

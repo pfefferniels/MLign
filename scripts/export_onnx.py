@@ -67,10 +67,16 @@ COND_OUTPUT_NAMES = {
     "bias": ["attr_cond_w"],
     "factored": ["attr_gate"],
     "residual": ["attr_gate", "attr_override"],
+    # `evidenced` adds one SCALAR after the residual block. The margin it
+    # multiplies is a function of the accumulated ranking, which the host
+    # already holds and the graph cannot see, so the weight ships and the
+    # product is formed host-side — the same division of labour as `log_ins`.
+    "evidenced": ["attr_gate", "attr_override", "attr_override_margin"],
 }
 COND_PER_TOKEN_OUTPUTS = {
     "factored": ["attr_gate"],
     "residual": ["attr_gate", "attr_override"],
+    "evidenced": ["attr_gate", "attr_override"],
 }
 
 
@@ -140,6 +146,14 @@ def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
         # match evidence, so the graph can no more compute its effect than it
         # can compute `log_ins`.
         return (*out, model.attr_gate(x), model.attr_override(x))
+    if mode == "evidenced":
+        # The per-token part of the override only. Its other term is
+        # `attr_override_margin * margin`, and `margin` comes from the
+        # accumulated ranking — a whole-row quantity that does not exist inside
+        # one window. Shipping the weight and letting the host add the product
+        # keeps the graph free of anything window-dependent.
+        return (*out, model.attr_gate(x), model.attr_override(x),
+                model.attr_override_margin)
     return out
 
 
@@ -343,13 +357,20 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                      "doc": "attr_gate(encoder output) per token — the logit of "
                             "P(this insertion elaborates a written note); "
                             "see head.attribution.conditioned"},
-                ] if cfg.attribution and cfg.attr_conditioned in ("factored", "residual") else []),
+                ] if cfg.attribution and cfg.attr_conditioned in ("factored", "residual", "evidenced") else []),
                 *([
                     {"name": "attr_override", "dtype": "float32", "shape": [1, "T", 1],
                      "doc": "attr_override(encoder output) per token — the logit of the "
                             "share of P(matched) the attribution head is allowed to claim "
                             "back from the match head; see head.attribution.conditioned"},
-                ] if cfg.attribution and cfg.attr_conditioned == "residual" else []),
+                ] if cfg.attribution and cfg.attr_conditioned in ("residual", "evidenced") else []),
+                *([
+                    {"name": "attr_override_margin", "dtype": "float32", "shape": [],
+                     "doc": "scalar weight on the attribution head's OWN ranking margin "
+                            "(top1 - top2 over score notes). The margin is a whole-row "
+                            "quantity the graph cannot see; the host forms the product. "
+                            "See head.attribution.conditioned"},
+                ] if cfg.attribution and cfg.attr_conditioned == "evidenced" else []),
             ],
         },
         "featurize": {
@@ -418,7 +439,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                 "read_as": ("argmax over each row: the written note this played note ornaments, "
                             "or the last column for 'not an ornament'. Softmax over the row gives "
                             "a usable confidence."
-                            + ("" if cfg.attr_conditioned not in ("factored", "residual") else
+                            + ("" if cfg.attr_conditioned not in ("factored", "residual", "evidenced") else
                                f" — except in {cfg.attr_conditioned!r} mode, where the row is "
                                "already normalized; see conditioned.already_normalized")),
                 "accumulate": ("exactly as `sim` is accumulated, and with the same window "
@@ -463,7 +484,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                         "ONCE, after window accumulation, on the full rows: accumulate "
                         "attr / none"
                         + (" / gate" if cfg.attr_conditioned == "factored" else "")
-                        + (" / gate / override" if cfg.attr_conditioned == "residual" else "")
+                        + (" / gate / override" if cfg.attr_conditioned in ("residual", "evidenced") else "")
                         + " exactly as above, then apply this to the averaged result. It is a "
                         "nonlinear function of the whole p->s row, so averaging conditioned "
                         "windows is not the same thing."),
@@ -480,9 +501,19 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             "Still unnormalized logits: softmax the row for a confidence."),
                     } if cfg.attr_conditioned == "bias" else {
                         "gate": "gate[j] = attr_gate[2 + n + j][0]   # (m,), read at the PERF tokens",
-                        **({} if cfg.attr_conditioned != "residual" else {
+                        **({} if cfg.attr_conditioned not in ("residual", "evidenced") else {
                             "override": ("over[j] = attr_override[2 + n + j][0]   # (m,), read at "
-                                         "the PERF tokens"),
+                                         "the PERF tokens"
+                                         + ("" if cfg.attr_conditioned != "evidenced" else
+                                            "\n  margin[j] = top1 - top2 of log_rank[j] over the "
+                                            "SCORE notes, clamped to [0, 20]; a row with fewer "
+                                            "than two candidates takes the clamp.\n"
+                                            "  over[j] += attr_override_margin * margin[j]\n"
+                                            "The margin is computed from the ACCUMULATED ranking, "
+                                            "after windows are averaged — it does not exist inside "
+                                            "one window. In training it is detached: the override "
+                                            "reads the ranking as evidence and must not sharpen "
+                                            "it.")),
                         }),
                         "logits_attr": (
                             "the whole row is rebuilt, and `none` (the attr_none dot product) is "
@@ -502,7 +533,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                               "* P(i | attributable); the none column collects both ways of not "
                               "being an ornament — matched, or an unattributable insertion."
                             + ("" if cfg.attr_conditioned == "factored" else
-                               "\n`residual` differs in `ins` alone: a learned share of the "
+                               "\n`residual`/`evidenced` differ in `ins` alone: a learned share of the "
                                "MATCHED mass moves into the insertion branch, so attribution can "
                                "still name an ornament where the match head believes the note "
                                "matched something — the one case `factored` structurally cannot "
