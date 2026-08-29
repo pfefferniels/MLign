@@ -168,6 +168,38 @@ function turn(rng, cfg, { id }, inverted, delayed) {
 }
 
 /**
+ * A tremolo: the written note struck repeatedly rather than held.
+ *
+ * 267 events in train-eligible ASAP, and the last notated sign the corpus did
+ * not model. MusicXML gives a beam count, which is the notated speed — 1 beam
+ * is eighths, 2 sixteenths, 3 thirty-seconds — and an unmeasured tremolo (3)
+ * is played about as fast as the hand allows. Repetitions therefore come from
+ * beams AND the principal's value, the same way a trill's do.
+ *
+ * espressivo's expansion collapses consecutive single-note slots of equal
+ * pitch, *except* where every slot is the same pitch — which is exactly this
+ * figure, so a bare repetition survives (`ornamentExpansion.ts`, rule 5).
+ */
+function tremolo(rng, cfg, { id, durQuarters }, beams) {
+  const perQuarter = [2, 4, 8][Math.max(0, Math.min(2, (beams || 3) - 1))];
+  const reps = Math.max(2, Math.min(cfg.maxPairs * 2,
+    Math.round(durQuarters * perQuarter * (0.8 + 0.4 * rng.nextDouble()))));
+  return {
+    pool: '',
+    order: Array.from({ length: reps }, () => `#${id}`).join(' '),
+    spread: spread(rng, cfg, {
+      lengthPct: wide(rng, [85, 100], cfg.breadth),
+      // A tremolo is metrical rather than rhetorical: far more even than a
+      // trill, and it does not accelerate into the next note.
+      intensity: lerp(rng, [0.9, 1.1]),
+      anticipate: 0.05,
+      monophonic: 0.9,
+    }),
+    alignment: 'at start',
+  };
+}
+
+/**
  * A grace note, from its ACTUAL notated pitch — the one figure whose pitch is
  * known rather than sampled, so the interval is exact.
  *
@@ -276,6 +308,9 @@ export function realizeSign(req, rng, cfg = DEFAULTS) {
       break;
     case 'grace':
       fig = grace(rng, cfg, { id, pitch: req.pitch }, req.gracePitches, req.slashed);
+      break;
+    case 'tremolo':
+      fig = tremolo(rng, cfg, { id, durQuarters: req.durQuarters }, req.beams);
       break;
     default:
       return null;

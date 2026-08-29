@@ -76,7 +76,7 @@ function parseArgs(argv) {
   const pos = [];
   const opt = {
     takes: 4, window: 128, stride: 64, breadth: 1, robustness: 'medium', jitter: 12,
-    addRate: null, imprecision: '', exaggerate: false, profile: 'modern', limit: 0,
+    addRate: null, ornJitter: null, minDur: null, imprecision: '', exaggerate: false, profile: 'modern', limit: 0,
     role: 'all',
   };
   for (let i = 0; i < argv.length; i++) {
@@ -88,6 +88,8 @@ function parseArgs(argv) {
     else if (a === '--robustness') opt.robustness = argv[++i];
     else if (a === '--jitter') opt.jitter = Number(argv[++i]);
     else if (a === '--add-rate') opt.addRate = Number(argv[++i]);
+    else if (a === '--orn-jitter') opt.ornJitter = Number(argv[++i]);
+    else if (a === '--min-dur') opt.minDur = Number(argv[++i]);
     else if (a === '--imprecision') opt.imprecision = argv[++i];
     else if (a === '--limit') opt.limit = Number(argv[++i]);
     else if (a === '--role') opt.role = argv[++i];
@@ -177,7 +179,8 @@ function pieceFor(spec, rng, want) {
  * note where the line finishes — usually not the trilled note at all. Folding
  * them in would put a few hundred trills on the wrong notes.
  *
- * `tremolo` is not modelled and is skipped rather than guessed at.
+ * `tremolo` carries its beam count in the sign's `value`, which is the notated
+ * speed and is passed straight through to the realizer.
  */
 function requestsFor(spec, idOf, byId) {
   const reqs = [];
@@ -194,7 +197,7 @@ function requestsFor(spec, idOf, byId) {
 
   for (const s of spec.signs) {
     const kind = s.kind;
-    if (kind === 'tremolo' || kind === 'wavy-line') continue;
+    if (kind === 'wavy-line') continue;
     if (kind === 'arpeggio') {
       const members = (s.chordIds || chordOf.get(s.noteId) || [])
         .map((i) => [byId.get(i), idOf.get(i)])
@@ -207,7 +210,8 @@ function requestsFor(spec, idOf, byId) {
     const n = byId.get(s.noteId);
     const msmId = idOf.get(s.noteId);
     if (!n || !msmId) continue;
-    push({ msmId, date: n.date, durQuarters: n.dur / PPQ, pitch: n.pitch, kind });
+    push({ msmId, date: n.date, durQuarters: n.dur / PPQ, pitch: n.pitch, kind,
+           beams: Number(s.value) || 3 });
   }
 
   // Grace notes are not score notes — asap_spec keeps them out of the note
@@ -391,7 +395,13 @@ async function main() {
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
   const cfg = mergeConfig({
     ...preset,
-    jitter: { stdMs: args.jitter },
+    jitter: {
+      stdMs: args.jitter,
+      // A trill's notes are ~40 ms apart; jittering each independently at the
+      // ordinary σ reorders them and erases the figure. See robustness.mjs.
+      ornamentStdMs: args.ornJitter,
+      minDurMs: args.minDur ?? undefined,
+    },
     ...(args.addRate === null ? {} : { add: { ...preset.add, rate: args.addRate } }),
   });
 

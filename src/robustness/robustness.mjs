@@ -52,7 +52,22 @@ export const defaultConfig = Object.freeze({
   // GT-neutral humanizer: Gaussian onset/offset noise on EVERY note, unlogged
   // (alignment is unchanged by it). Deterministic replacement for espressivo's
   // unseedable imprecision maps. offsetStdMs defaults to onset's std.
-  jitter: { stdMs: 0, offsetStdMs: null },
+  //
+  // `ornamentStdMs` is the WITHIN-FIGURE spread for ornament notes, which is a
+  // different quantity from the note-to-note noise around it. An ornament is a
+  // motor pattern: the whole figure arrives early or late as a unit, but its
+  // internal timing is far tighter than the playing around it. Jittering each
+  // of a trill's notes independently at the ordinary σ is not humanisation —
+  // at 40 ms between notes it reorders them and erases the figure's shape. So
+  // a figure draws ONE shared offset at `stdMs` and each of its notes a small
+  // one at `ornamentStdMs`. null = the old behaviour (same σ as everything
+  // else), kept so existing corpora still mean what they meant.
+  //
+  // `minDurMs` is the floor a jittered note is not allowed to fall below; the
+  // offset draw is independent of the onset's, so a short note can otherwise
+  // invert. 8 ms is the historical value and is not a real piano note — it is
+  // where the ~11 % of sub-15 ms ornament notes in the older corpora came from.
+  jitter: { stdMs: 0, offsetStdMs: null, ornamentStdMs: null, minDurMs: 8 },
 });
 
 export const presetLight = mergeConfig({
@@ -184,12 +199,22 @@ export function applyRobustness(data, config, seed) {
   // GT-neutral timing jitter, after all identity-bearing ops.
   if (cfg.jitter.stdMs > 0) {
     const offStd = cfg.jitter.offsetStdMs ?? cfg.jitter.stdMs;
+    const ornStd = cfg.jitter.ornamentStdMs ?? cfg.jitter.stdMs;
+    const minDur = cfg.jitter.minDurMs ?? 8;
+    // One shared offset per figure, drawn once and reused: the figure moves as
+    // a unit. Keyed on the ornament instruction id, so a repeated ornament's
+    // separate passes are separate figures.
+    const figureShift = new Map();
     for (const part of parts) {
       for (const n of part.notes) {
-        n.milliseconds.date += normal(rng, 0, cfg.jitter.stdMs);
-        n.milliseconds.end += normal(rng, 0, offStd);
-        if (n.milliseconds.end < n.milliseconds.date + 8) {
-          n.milliseconds.end = n.milliseconds.date + 8; // keep a sounding note
+        const ref = n.origin?.type === 'ornament' ? `${n.origin.ref}:${n.origin.pass ?? 0}` : null;
+        if (ref !== null && !figureShift.has(ref)) figureShift.set(ref, normal(rng, 0, cfg.jitter.stdMs));
+        const shift = ref === null ? normal(rng, 0, cfg.jitter.stdMs)
+                                   : figureShift.get(ref) + normal(rng, 0, ornStd);
+        n.milliseconds.date += shift;
+        n.milliseconds.end += normal(rng, 0, ref === null ? offStd : ornStd);
+        if (n.milliseconds.end < n.milliseconds.date + minDur) {
+          n.milliseconds.end = n.milliseconds.date + minDur; // keep a sounding note
         }
       }
     }

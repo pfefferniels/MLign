@@ -50,12 +50,12 @@ function render(requests, seed = 7, breadth = 1.5) {
   return { notes: data.parts[0].notes, dropped, orn };
 }
 
-const GENERATING = ['trill', 'mordent', 'inverted-mordent', 'turn', 'inverted-turn', 'delayed-turn', 'grace'];
+const GENERATING = ['trill', 'mordent', 'inverted-mordent', 'turn', 'inverted-turn', 'delayed-turn', 'grace', 'tremolo'];
 
 function requestFor(kind, index = 0) {
   return {
     msmId: 'p1n1', date: 1440, durQuarters: 2, pitch: 64, kind, index,
-    gracePitches: [62], slashed: false,
+    gracePitches: [62], slashed: false, beams: 3,
   };
 }
 
@@ -131,4 +131,18 @@ test('a piece with no requests renders unchanged', () => {
   assert.equal(orn.map, '');
   assert.equal(notes.length, NOTES.length);
   assert.equal(notes.filter((n) => n.id === null).length, 0);
+});
+
+test('tremolo: repeats the written note, faster with more beams', () => {
+  const count = (b) => {
+    const { notes } = render([{ ...requestFor('tremolo'), beams: b }], 5);
+    return notes.filter((n) => n.id === null).length;
+  };
+  const [one, three] = [count(1), count(3)];
+  assert.ok(three > one, `3 beams (${three}) must be denser than 1 beam (${one})`);
+  // Every generated note is the principal's own pitch — that is what a
+  // single-note tremolo is, and espressivo's dedup rule spares it only because
+  // every slot shares one pitch.
+  const { notes } = render([requestFor('tremolo')], 5);
+  for (const n of notes.filter((x) => x.id === null)) assert.equal(n.pitch, 64);
 });

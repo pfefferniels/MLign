@@ -53,7 +53,7 @@ const PRESETS = { none: {}, light: presetLight, medium: presetMedium, heavy: pre
 function parseArgs(argv) {
   const pos = [];
   const opt = {
-    robustness: 'medium', jitter: 12, ornaments: 0, addRate: null,
+    robustness: 'medium', jitter: 12, ornaments: 0, addRate: null, ornJitter: null, minDur: null,
     exaggerate: false, profile: 'modern', breadth: 1, imprecision: '',
   };
   for (let i = 0; i < argv.length; i++) {
@@ -62,6 +62,8 @@ function parseArgs(argv) {
     else if (a === '--jitter') opt.jitter = Number(argv[++i]);
     else if (a === '--ornaments') opt.ornaments = Number(argv[++i]);
     else if (a === '--add-rate') opt.addRate = Number(argv[++i]);
+    else if (a === '--orn-jitter') opt.ornJitter = Number(argv[++i]);
+    else if (a === '--min-dur') opt.minDur = Number(argv[++i]);
     // --exaggerate takes an optional profile name: `--exaggerate early`.
     else if (a === '--exaggerate') {
       opt.exaggerate = true;
@@ -98,10 +100,9 @@ const OPT = { twoPartProb: 0.5, asynchronyProb: 1.0, movementProb: 0.5 };
 /**
  * How many ornament signs a piece carries, per 1000 score notes.
  *
- * Measured over the 203 train-eligible ASAP scores: **4571 ornament EVENTS
- * over 535 736 sounding notes = 8.53 per 1000**. 14.3 % of scores carry none;
- * the rest fit a lognormal with median 6.24 and ln-sd 1.04 (per-score
- * q25/q50/q75 2.00/4.48/11.54, corpus mean 9.14 against 8.53 observed).
+ * Measured over the 203 train-eligible ASAP scores: **4838 ornament EVENTS
+ * over 535 736 sounding notes = 9.03 per 1000**. 14.3 % of scores carry none;
+ * the rest fit a lognormal with median 6.33 and ln-sd 1.05.
  *
  * Both halves of that sentence name a place an earlier version of this
  * constant went wrong, in opposite directions:
@@ -120,7 +121,7 @@ const OPT = { twoPartProb: 0.5, asynchronyProb: 1.0, movementProb: 0.5 };
  * trained on that has no way to learn what "not an ornament" looks like, which
  * is exactly the half that failed to transfer to real recordings.
  */
-export const ORN_RATE = { zeroProb: 0.143, lnMedian: 1.831, lnSd: 1.036 };
+export const ORN_RATE = { zeroProb: 0.143, lnMedian: 1.846, lnSd: 1.047 };
 
 /**
  * Relative frequency of each event kind, from the same census. The ordering is
@@ -132,11 +133,12 @@ export const ORN_RATE = { zeroProb: 0.143, lnMedian: 1.831, lnSd: 1.036 };
  * sampled here.
  */
 export const ORN_KINDS = [
-  ['grace', 0.498],
-  ['arpeggio', 0.268],
-  ['trill', 0.153],
-  ['inverted-mordent', 0.039],
-  ['turn', 0.034],
+  ['grace', 0.470],
+  ['arpeggio', 0.253],
+  ['trill', 0.145],
+  ['tremolo', 0.055],
+  ['inverted-mordent', 0.037],
+  ['turn', 0.032],
   ['mordent', 0.007],
 ];
 
@@ -244,7 +246,7 @@ export function sampleOrnaments(piece, rng, rateScale, breadth = 1) {
     if (taken.has(i)) continue;
     const n = part.notes[i];
     const durQuarters = n.dur / 720;
-    if ((kind === 'trill' || kind === 'turn') && durQuarters < 0.5) continue;
+    if ((kind === 'trill' || kind === 'turn' || kind === 'tremolo') && durQuarters < 0.5) continue;
     if (durQuarters < 0.125) continue;
     taken.add(i);
     requests.push({
@@ -256,6 +258,7 @@ export function sampleOrnaments(piece, rng, rateScale, breadth = 1) {
       // A sampled grace has no notated pitch of its own, so the run is drawn
       // from the real distribution of run lengths and leans into the principal.
       gracePitches: gracePitches(rng, n.pitch),
+      beams: 1 + rng.nextInt(3),
       slashed: rng.nextDouble() < 0.5,
       index: requests.length,
     });
@@ -436,7 +439,13 @@ async function main() {
   // existing corpora mean.
   const cfg = mergeConfig({
     ...preset,
-    jitter: { stdMs: args.jitter },
+    jitter: {
+      stdMs: args.jitter,
+      // A trill's notes are ~40 ms apart; jittering each independently at the
+      // ordinary σ reorders them and erases the figure. See robustness.mjs.
+      ornamentStdMs: args.ornJitter,
+      minDurMs: args.minDur ?? undefined,
+    },
     ...(args.addRate === null ? {} : { add: { ...preset.add, rate: args.addRate } }),
   });
 
