@@ -1,0 +1,22 @@
+{
+  "rows": 225,
+  "detect_p": 0.9094,
+  "detect_r": 0.8925,
+  "detect_f": 0.9009,
+  "attr_acc": 0.7864,
+  "attr_n": 4130,
+  "group_exact": 0.3081,
+  "group_n": 740,
+  "by_match_head": {
+    "flagged_acc": 0.8703,
+    "flagged_n": 3732,
+    "vetoed_acc": 0.0,
+    "vetoed_n": 398,
+    "veto_share": 0.0964,
+    "log_ins_floored": 0.0005,
+    "log_ins_mean": -0.3218
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/realorn-batik.jsonl",
+  "tier": "real-recording"
+}

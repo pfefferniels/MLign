@@ -1,0 +1,22 @@
+{
+  "rows": 225,
+  "detect_p": 0.9645,
+  "detect_r": 0.891,
+  "detect_f": 0.9263,
+  "attr_acc": 0.7594,
+  "attr_n": 3047,
+  "group_exact": 0.615,
+  "group_n": 787,
+  "by_match_head": {
+    "flagged_acc": 0.8029,
+    "flagged_n": 2882,
+    "vetoed_acc": 0.0,
+    "vetoed_n": 165,
+    "veto_share": 0.0542,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2161
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/realorn-asap.jsonl",
+  "tier": "real-recording"
+}
