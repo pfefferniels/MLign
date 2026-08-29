@@ -386,10 +386,19 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                     "mode": cfg.attr_conditioned,
                     "log_floor": NoteAligner.LOG_FLOOR,
                     "match_evidence": (
-                        "from the host's OWN p->s logits — the same (m, n+1) matrix it "
-                        "feeds the decode. The graph emits nothing extra for this, and "
-                        "must not: inside a window the p->s softmax runs over that "
-                        "window's score notes only.\n"
+                        "from the host's own p->s logits, but NOT the accumulated matrix "
+                        "it feeds the decode — that one holds 2x the raw sim (see "
+                        "host.accumulate), while training saw the UNDOUBLED logits_p2s "
+                        "this file's `head` block defines. Halve the sim half and leave "
+                        "null_row alone, which is already single because it appears in "
+                        "only one of the two accumulated directions:\n"
+                        "  logits_p2s[j] = concat([accumulated_sim.T[j] / 2, null_row[j]])\n"
+                        "Getting this wrong is not a rounding error: doubling sharpens the "
+                        "log_softmax, and on a real flourish it moved per-note attribution "
+                        "confidence from .987 to .112 — under any sane acceptance "
+                        "threshold, a dropped ornament.\n"
+                        "The graph emits nothing extra for this, and must not: inside a "
+                        "window the p->s softmax runs over that window's score notes only.\n"
                         "  lp             = log_softmax(logits_p2s, axis=1)   # (m, n + 1)\n"
                         "  log_ins[j]     = max(lp[j][n], log_floor)\n"
                         "  log_matched[j] = max(logsumexp(lp[j][0:n]), log_floor)\n"
