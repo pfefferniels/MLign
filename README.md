@@ -94,8 +94,6 @@ PYTHONPATH=src python -m mlign.cli align score.mei performance.mid --format matc
 PYTHONPATH=src python -m mlign.serve
 ```
 
-![test page](docs/testpage.png)
-
 MusicXML input and the released model need only `torch`, `numpy` and
 `partitura`; MEI input needs a built espressivo (path in `src/mlign/cli.py`).
 Benchmarks (`eval/`) expect ASAP, Vienna 4x22 and Batik under
