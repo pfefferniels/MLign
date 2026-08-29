@@ -58,7 +58,7 @@ def main() -> None:
                          "rows; other sources are ignored by the head's loss)")
     ap.add_argument("--attr-weight", type=float, default=0.2)
     ap.add_argument("--attr-conditioned", default="",
-                    choices=["", "bias", "factored", "residual", "evidenced"],
+                    choices=["", "bias", "factored", "residual", "evidenced", "calibrated"],
                     help="let the attribution head read the match head's (detached) "
                          "insertion decision instead of re-deriving it: 'bias' adds "
                          "log P(matched) to the none column, 'factored' rebuilds the "
@@ -67,7 +67,9 @@ def main() -> None:
                          "(measured: it does not — the override is priced out by the "
                          "~100x more numerous matched notes), 'evidenced' prices that "
                          "override by the head's own ranking margin so overriding is "
-                         "cheap only where it is confident WHICH note is ornamented")
+                         "cheap only where it is confident WHICH note is ornamented, "
+                         "'calibrated' drops the override entirely and prices the GATE "
+                         "by that margin instead")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()

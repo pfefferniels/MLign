@@ -66,6 +66,14 @@ class ModelConfig:
     #                but converges to sigmoid ~.0008 on the vetoed notes, BELOW
     #                its value where it is inert, because raising it costs the
     #                ~100x more numerous matched notes. Kept for reproducibility.
+    #   "calibrated" — factored, with the GATE priced by the head's own ranking
+    #                margin, and NO override at all. The ablation of "evidenced":
+    #                v12both showed the override fires LESS than in v11evid
+    #                (crossover 11.24 vs 8.89) while attribution improves, and
+    #                vetoed recovery stayed .0000 for a fifth model — so the
+    #                margin is doing CALIBRATION, not overriding. If that is the
+    #                whole effect this reproduces it with one parameter fewer,
+    #                one ONNX output fewer, and no third mode in the host.
     #   "evidenced" — residual, with the override additionally priced by the
     #                head's OWN ranking margin (top1 - top2 over score notes,
     #                detached). Overriding is then cheap only where the head is
@@ -105,7 +113,8 @@ def config_from_ckpt(cfg: dict | None, state: dict | None = None, **overrides) -
         # `residual` is `factored` plus the override, so asking in the other
         # order answers with the mode one step down and loads strictly into a
         # model missing a parameter.
-        conditioned = ("evidenced" if "attr_override_margin" in keys
+        conditioned = ("calibrated" if "attr_gate_margin" in keys
+                       else "evidenced" if "attr_override_margin" in keys
                        else "residual" if has("attr_override")
                        else "factored" if has("attr_gate")
                        else "bias" if "attr_cond_w" in keys else "")
@@ -239,7 +248,7 @@ class NoteAligner(nn.Module):
             self.attr_scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
             if cfg.attr_conditioned == "bias":
                 self.attr_cond_w = nn.Parameter(torch.tensor(1.0))
-            elif cfg.attr_conditioned in ("factored", "residual", "evidenced"):
+            elif cfg.attr_conditioned in ("factored", "residual", "evidenced", "calibrated"):
                 # P(attributable | insertion): not every insertion elaborates a
                 # written note — slips and repeat restarts do not — so the
                 # factorization needs this third factor to stay honest.
@@ -251,6 +260,11 @@ class NoteAligner(nn.Module):
                     self.attr_override = nn.Linear(cfg.d_model, 1)
                     nn.init.zeros_(self.attr_override.weight)
                     nn.init.constant_(self.attr_override.bias, -4.0)
+                if cfg.attr_conditioned == "calibrated":
+                    # Same scalar, same detached margin — but it prices the GATE,
+                    # P(attributable | insertion), instead of an override. Zero
+                    # init, so the run starts as bit-exact `factored`.
+                    self.attr_gate_margin = nn.Parameter(torch.tensor(0.0))
                 if cfg.attr_conditioned == "evidenced":
                     # One scalar: how much the head's OWN ranking margin is
                     # allowed to buy an override. Kept as a separate parameter
@@ -360,6 +374,8 @@ class NoteAligner(nn.Module):
         rank = logits_attr[..., :-1]
         log_rank = rank - torch.logsumexp(rank, dim=-1, keepdim=True)
         gate = self.attr_gate(p_enc)
+        if self.cfg.attr_conditioned == "calibrated":
+            gate = gate + self.attr_gate_margin * _rank_margin(log_rank)
         log_rest = log_matched
         if self.cfg.attr_conditioned in ("residual", "evidenced"):
             # Move a learned share of the MATCHED mass back into play, so a

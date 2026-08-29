@@ -139,6 +139,14 @@ def rebuild_logits_attr(got: dict[str, np.ndarray], n: int, m: int) -> np.ndarra
     rank = row[:, :-1]
     log_rank = rank - _logsumexp(rank)
     gate = got["attr_gate"][0, 2 + n:2 + n + m]     # (m, 1)
+    if "attr_gate_margin" in got:
+        # "calibrated": the margin prices the GATE, and there is no override.
+        part_g = np.sort(log_rank, axis=-1)[:, ::-1]
+        mg = (part_g[:, 0:1] - part_g[:, 1:2]) if rank.shape[-1] > 1 else np.full(
+            (rank.shape[0], 1), RANK_MARGIN_MAX)
+        mg = np.clip(np.nan_to_num(mg, nan=RANK_MARGIN_MAX, posinf=RANK_MARGIN_MAX),
+                     0.0, RANK_MARGIN_MAX)
+        gate = gate + float(got["attr_gate_margin"]) * mg
 
     ins, rest = log_ins, log_matched
     if "attr_override_margin" in got:
@@ -187,7 +195,8 @@ def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol
         return 0.0
     # `residual` carries a gate too, so it has to be asked about before
     # `factored` — the same ordering trap as `conditioning_from_state`.
-    mode = ("evidenced" if "attr_override_margin" in names else
+    mode = ("calibrated" if "attr_gate_margin" in names else
+            "evidenced" if "attr_override_margin" in names else
             "residual" if "attr_override" in names else
             "factored" if "attr_gate" in names else
             "bias" if "attr_cond_w" in names else "")

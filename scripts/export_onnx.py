@@ -72,11 +72,14 @@ COND_OUTPUT_NAMES = {
     # already holds and the graph cannot see, so the weight ships and the
     # product is formed host-side — the same division of labour as `log_ins`.
     "evidenced": ["attr_gate", "attr_override", "attr_override_margin"],
+    # `calibrated` drops the override entirely: the margin prices the GATE.
+    "calibrated": ["attr_gate", "attr_gate_margin"],
 }
 COND_PER_TOKEN_OUTPUTS = {
     "factored": ["attr_gate"],
     "residual": ["attr_gate", "attr_override"],
     "evidenced": ["attr_gate", "attr_override"],
+    "calibrated": ["attr_gate"],
 }
 
 
@@ -146,6 +149,8 @@ def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
         # match evidence, so the graph can no more compute its effect than it
         # can compute `log_ins`.
         return (*out, model.attr_gate(x), model.attr_override(x))
+    if mode == "calibrated":
+        return (*out, model.attr_gate(x), model.attr_gate_margin)
     if mode == "evidenced":
         # The per-token part of the override only. Its other term is
         # `attr_override_margin * margin`, and `margin` comes from the
@@ -357,7 +362,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                      "doc": "attr_gate(encoder output) per token — the logit of "
                             "P(this insertion elaborates a written note); "
                             "see head.attribution.conditioned"},
-                ] if cfg.attribution and cfg.attr_conditioned in ("factored", "residual", "evidenced") else []),
+                ] if cfg.attribution and cfg.attr_conditioned in ("factored", "residual", "evidenced", "calibrated") else []),
                 *([
                     {"name": "attr_override", "dtype": "float32", "shape": [1, "T", 1],
                      "doc": "attr_override(encoder output) per token — the logit of the "
@@ -371,6 +376,12 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             "quantity the graph cannot see; the host forms the product. "
                             "See head.attribution.conditioned"},
                 ] if cfg.attribution and cfg.attr_conditioned == "evidenced" else []),
+                *([
+                    {"name": "attr_gate_margin", "dtype": "float32", "shape": [],
+                     "doc": "scalar weight on the ranking margin, added to the GATE logit "
+                            "before logsigmoid. No override tensor exists in this mode; "
+                            "see head.attribution.conditioned"},
+                ] if cfg.attribution and cfg.attr_conditioned == "calibrated" else []),
             ],
         },
         "featurize": {
@@ -439,7 +450,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                 "read_as": ("argmax over each row: the written note this played note ornaments, "
                             "or the last column for 'not an ornament'. Softmax over the row gives "
                             "a usable confidence."
-                            + ("" if cfg.attr_conditioned not in ("factored", "residual", "evidenced") else
+                            + ("" if cfg.attr_conditioned not in ("factored", "residual", "evidenced", "calibrated") else
                                f" — except in {cfg.attr_conditioned!r} mode, where the row is "
                                "already normalized; see conditioned.already_normalized")),
                 "accumulate": ("exactly as `sim` is accumulated, and with the same window "
@@ -483,7 +494,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                     "when": (
                         "ONCE, after window accumulation, on the full rows: accumulate "
                         "attr / none"
-                        + (" / gate" if cfg.attr_conditioned == "factored" else "")
+                        + (" / gate" if cfg.attr_conditioned in ("factored", "calibrated") else "")
                         + (" / gate / override" if cfg.attr_conditioned in ("residual", "evidenced") else "")
                         + " exactly as above, then apply this to the averaged result. It is a "
                         "nonlinear function of the whole p->s row, so averaging conditioned "
@@ -500,7 +511,13 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             "i.e. the unconditioned row with one term added to its last column. "
                             "Still unnormalized logits: softmax the row for a confidence."),
                     } if cfg.attr_conditioned == "bias" else {
-                        "gate": "gate[j] = attr_gate[2 + n + j][0]   # (m,), read at the PERF tokens",
+                        "gate": ("gate[j] = attr_gate[2 + n + j][0]   # (m,), read at the PERF tokens"
+                                 + ("" if cfg.attr_conditioned != "calibrated" else
+                                    "\n  margin[j] = top1 - top2 of log_rank[j] over the SCORE notes, "
+                                    "clamped to [0, 20]\n"
+                                    "  gate[j] += attr_gate_margin * margin[j]\n"
+                                    "computed from the ACCUMULATED ranking, after windows are "
+                                    "averaged. Detached in training.")),
                         **({} if cfg.attr_conditioned not in ("residual", "evidenced") else {
                             "override": ("over[j] = attr_override[2 + n + j][0]   # (m,), read at "
                                          "the PERF tokens"
@@ -521,7 +538,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                             "attribution block keeps its shape:\n"
                             "  log_rank[j][i] = attr[j][i] - logsumexp(attr[j][0:n])   # (m, n)\n"
                             + ("  ins[j], rest[j] = log_ins[j], log_matched[j]\n"
-                               if cfg.attr_conditioned == "factored" else
+                               if cfg.attr_conditioned in ("factored", "calibrated") else
                                "  ins[j]  = logaddexp(log_ins[j], log_matched[j] + "
                                "logsigmoid(over[j]))\n"
                                "  rest[j] = log_matched[j] + logsigmoid(-over[j])\n")
@@ -532,7 +549,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                               "Reads as P(anchor = i) = P(insertion) * P(attributable | insertion) "
                               "* P(i | attributable); the none column collects both ways of not "
                               "being an ornament — matched, or an unattributable insertion."
-                            + ("" if cfg.attr_conditioned == "factored" else
+                            + ("" if cfg.attr_conditioned in ("factored", "calibrated") else
                                "\n`residual`/`evidenced` differ in `ins` alone: a learned share of the "
                                "MATCHED mass moves into the insertion branch, so attribution can "
                                "still name an ornament where the match head believes the note "
