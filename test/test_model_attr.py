@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from mlign.dataset import collate, featurize  # noqa: E402
 from mlign.model import ModelConfig, NoteAligner, alignment_loss, config_from_ckpt  # noqa: E402
 
-MODES = ["", "bias", "factored"]
+MODES = ["", "bias", "factored", "residual"]
 
 # Match-head-only parameters: the encoder is shared with attribution by design,
 # these are not.

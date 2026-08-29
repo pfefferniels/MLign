@@ -54,6 +54,14 @@ class ModelConfig:
     #   ""         — off (v2 behaviour: an independent, self-taught none column)
     #   "bias"     — none column += w · log P(matched); minimal, strictly additive
     #   "factored" — P(anchor) = P(ins) · P(attributable | ins) · P(anchor | ins)
+    #   "residual" — factored, plus a learned per-note override that lets
+    #                attribution disagree with the match head. Measured on real
+    #                recordings, plain "factored" recovers 0 of the 525 ornament
+    #                notes the match head misjudges as matched — a structural
+    #                veto worth ~12.7 % of all ornament notes — while the
+    #                unconditioned head recovers 4.9 % of them. This keeps
+    #                factored's win where the match head is right (84.5 % vs
+    #                72.2 %) and reopens the door where it is wrong.
     # The match-head term is always DETACHED: alignment must stay unable to
     # feel the attribution loss, which is what kept the head strictly additive.
     attr_conditioned: str = ""
@@ -83,7 +91,8 @@ def config_from_ckpt(cfg: dict | None, state: dict | None = None, **overrides) -
         attribution = has("attr_")
     conditioned = cfg.get("attr_conditioned")
     if not conditioned:
-        conditioned = "factored" if has("attr_gate") else "bias" if "attr_cond_w" in keys else ""
+        conditioned = ("residual" if has("attr_override") else "factored" if has("attr_gate")
+                       else "bias" if "attr_cond_w" in keys else "")
     fields = {
         "d_model": int(cfg.get("d_model", 192)),
         "n_layers": int(cfg.get("n_layers", 4)),
@@ -184,11 +193,18 @@ class NoteAligner(nn.Module):
             self.attr_scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
             if cfg.attr_conditioned == "bias":
                 self.attr_cond_w = nn.Parameter(torch.tensor(1.0))
-            elif cfg.attr_conditioned == "factored":
+            elif cfg.attr_conditioned in ("factored", "residual"):
                 # P(attributable | insertion): not every insertion elaborates a
                 # written note — slips and repeat restarts do not — so the
                 # factorization needs this third factor to stay honest.
                 self.attr_gate = nn.Linear(cfg.d_model, 1)
+                if cfg.attr_conditioned == "residual":
+                    # P(this is an ornament anyway | the match head says matched).
+                    # Initialised strongly negative so the run starts as plain
+                    # `factored` and has to earn every override.
+                    self.attr_override = nn.Linear(cfg.d_model, 1)
+                    nn.init.zeros_(self.attr_override.weight)
+                    nn.init.constant_(self.attr_override.bias, -4.0)
             elif cfg.attr_conditioned:
                 raise ValueError(f"unknown attr_conditioned mode: {cfg.attr_conditioned!r}")
 
@@ -290,9 +306,18 @@ class NoteAligner(nn.Module):
         rank = logits_attr[..., :-1]
         log_rank = rank - torch.logsumexp(rank, dim=-1, keepdim=True)
         gate = self.attr_gate(p_enc)
+        log_rest = log_matched
+        if self.cfg.attr_conditioned == "residual":
+            # Move a learned share of the MATCHED mass back into play, so a
+            # played note can be an ornament even where the match head thinks it
+            # matched something. Stays a proper distribution: the two branches
+            # below still sum to P(ins) + P(matched) = 1.
+            over = F.logsigmoid(self.attr_override(p_enc))
+            log_ins = _logaddexp(log_ins, log_matched + over)
+            log_rest = log_matched + F.logsigmoid(-self.attr_override(p_enc))
         return torch.cat(
             [log_ins + F.logsigmoid(gate) + log_rank,
-             _logaddexp(log_ins + F.logsigmoid(-gate), log_matched)],
+             _logaddexp(log_ins + F.logsigmoid(-gate), log_rest)],
             dim=-1,
         )
 
