@@ -1,0 +1,13 @@
+{
+  "rows": 1689,
+  "detect_p": 0.7838,
+  "detect_r": 0.5166,
+  "detect_f": 0.6228,
+  "attr_acc": 0.4156,
+  "attr_n": 3734,
+  "group_exact": 0.2463,
+  "group_n": 1693,
+  "ckpt": "models/mlign-v2.pt",
+  "corpus": "data/corpus/asap-orn-holdout.jsonl",
+  "tier": "synthetic-only"
+}

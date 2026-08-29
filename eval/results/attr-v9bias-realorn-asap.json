@@ -1,0 +1,13 @@
+{
+  "rows": 225,
+  "detect_p": 0.9852,
+  "detect_r": 0.5034,
+  "detect_f": 0.6664,
+  "attr_acc": 0.4388,
+  "attr_n": 3047,
+  "group_exact": 0.2236,
+  "group_n": 787,
+  "ckpt": "runs/v9bias/best.pt",
+  "corpus": "data/corpus/realorn-asap.jsonl",
+  "tier": "real-recording"
+}

@@ -43,6 +43,64 @@ class ModelConfig:
     # strictly additive — the alignment metrics cannot regress from adding it.
     attribution: bool = False
     attr_weight: float = 0.2
+    # Conditioning the attribution head on the match head's insertion decision.
+    # The head splits into two questions that behave completely differently:
+    # WHICH written note a played note elaborates transfers to real recordings;
+    # WHETHER it is an ornament at all does not. But "whether" is largely a
+    # question the match head has already answered — and answered from REAL
+    # data, since realgt rows carry true insertion labels while attribution is
+    # supervised on synthetic rows alone. So hand that half over instead of
+    # making attribution re-derive it.
+    #   ""         — off (v2 behaviour: an independent, self-taught none column)
+    #   "bias"     — none column += w · log P(matched); minimal, strictly additive
+    #   "factored" — P(anchor) = P(ins) · P(attributable | ins) · P(anchor | ins)
+    # The match-head term is always DETACHED: alignment must stay unable to
+    # feel the attribution loss, which is what kept the head strictly additive.
+    attr_conditioned: str = ""
+
+
+def config_from_ckpt(cfg: dict | None, state: dict | None = None, **overrides) -> ModelConfig:
+    """ModelConfig as a checkpoint describes itself.
+
+    `cfg` is the checkpoint's training args (`config`, i.e. `vars(args)`);
+    `state` is its `model` state dict. Heads are read from the args when they
+    are recorded there and inferred from the WEIGHTS when they are not — an
+    older checkpoint predates the flag, and the weights cannot be wrong about
+    which heads exist.
+
+    Every loader used to spell this out for itself, and every one of them was
+    missing at least one field: `mlign align`, `mlign serve` and four eval
+    scripts could not load `models/mlign-v2.pt` at all, because they built a
+    model with no attribution head and then loaded strictly into it. That is
+    the failure this exists to make impossible — pass the state dict and the
+    call site cannot fall behind a new head again.
+    """
+    cfg = cfg or {}
+    keys = tuple(state or ())
+    has = lambda p: any(k.startswith(p) for k in keys)
+    attribution = cfg.get("attribution")
+    if attribution is None:
+        attribution = has("attr_")
+    conditioned = cfg.get("attr_conditioned")
+    if not conditioned:
+        conditioned = "factored" if has("attr_gate") else "bias" if "attr_cond_w" in keys else ""
+    fields = {
+        "d_model": int(cfg.get("d_model", 192)),
+        "n_layers": int(cfg.get("n_layers", 4)),
+        "matchability": bool(cfg.get("matchability", has("matchability_"))),
+        "attribution": bool(attribution),
+        "attr_weight": float(cfg.get("attr_weight", 0.2)),
+        "attr_conditioned": conditioned,
+    }
+    return ModelConfig(**(fields | overrides))
+
+
+def _logaddexp(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """log(e^a + e^b), spelled out rather than torch.logaddexp so the ONNX
+    exporter has only ops it knows. Both arguments are clamped above -inf by
+    their callers, so `a - b` is never nan."""
+    m = torch.maximum(a, b)
+    return m + torch.log1p(torch.exp(-(a - b).abs()))
 
 
 class RelPosBias(nn.Module):
@@ -124,6 +182,15 @@ class NoteAligner(nn.Module):
             # own temperature, so attribution gradients never retune the
             # match head's scale
             self.attr_scale = nn.Parameter(torch.tensor(1.0 / math.sqrt(cfg.d_model)))
+            if cfg.attr_conditioned == "bias":
+                self.attr_cond_w = nn.Parameter(torch.tensor(1.0))
+            elif cfg.attr_conditioned == "factored":
+                # P(attributable | insertion): not every insertion elaborates a
+                # written note — slips and repeat restarts do not — so the
+                # factorization needs this third factor to stay honest.
+                self.attr_gate = nn.Linear(cfg.d_model, 1)
+            elif cfg.attr_conditioned:
+                raise ValueError(f"unknown attr_conditioned mode: {cfg.attr_conditioned!r}")
 
     def encode(self, pitch, cont, segment, position, pad):
         x = self.pitch_emb(pitch) + self.segment_emb(segment) + self.cont_proj(cont)
@@ -185,12 +252,49 @@ class NoteAligner(nn.Module):
 
         if self.cfg.attribution:
             # (B, m, n+1); last column = "not an ornament".
-            attr = torch.einsum("bmd,bnd->bmn", self.attr_p(p_enc), self.attr_s(s_enc))
-            none_col = torch.einsum("bmd,d->bm", self.attr_p(p_enc), self.attr_none)[:, :, None]
+            a_p = self.attr_p(p_enc)
+            attr = torch.einsum("bmd,bnd->bmn", a_p, self.attr_s(s_enc))
+            none_col = torch.einsum("bmd,d->bm", a_p, self.attr_none)[:, :, None]
             logits_attr = torch.cat([attr, none_col], dim=2) * self.attr_scale
-            out["logits_attr"] = logits_attr.masked_fill(s_pad_col, float("-inf"))
+            logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
+            if self.cfg.attr_conditioned:
+                logits_attr = self._condition_attr(logits_attr, logits_p2s, p_enc)
+                logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
+            out["logits_attr"] = logits_attr
 
         return out
+
+    # The match head's own verdict on this played note, as two log-probabilities
+    # that sum to one. Clamped: a match head that is *certain* would otherwise
+    # put an infinite loss on a mislabelled row and blow the run up.
+    LOG_FLOOR = -12.0
+
+    def _match_evidence(self, logits_p2s: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        lp = torch.log_softmax(logits_p2s.detach(), dim=-1)
+        log_ins = lp[..., -1:].clamp(min=self.LOG_FLOOR)
+        log_matched = torch.logsumexp(lp[..., :-1], dim=-1, keepdim=True).clamp(min=self.LOG_FLOOR)
+        return log_ins, log_matched
+
+    def _condition_attr(self, logits_attr, logits_p2s, p_enc) -> torch.Tensor:
+        log_ins, log_matched = self._match_evidence(logits_p2s)
+        if self.cfg.attr_conditioned == "bias":
+            return torch.cat(
+                [logits_attr[..., :-1], logits_attr[..., -1:] + self.attr_cond_w * log_matched],
+                dim=-1,
+            )
+        # "factored": the head keeps only the question it is good at — the
+        # ranking over score notes — while "is this an ornament at all" becomes
+        # P(insertion) (match head, real-data-calibrated) times a learned
+        # P(attributable | insertion). With log_ins detached, a row whose target
+        # is "none" contributes no gradient to the ranking at all.
+        rank = logits_attr[..., :-1]
+        log_rank = rank - torch.logsumexp(rank, dim=-1, keepdim=True)
+        gate = self.attr_gate(p_enc)
+        return torch.cat(
+            [log_ins + F.logsigmoid(gate) + log_rank,
+             _logaddexp(log_ins + F.logsigmoid(-gate), log_matched)],
+            dim=-1,
+        )
 
 
 def alignment_loss(out: dict, batch: dict, weight_attr: float = 0.2) -> tuple[torch.Tensor, dict]:

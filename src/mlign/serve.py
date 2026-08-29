@@ -53,19 +53,13 @@ class Aligner:
         import torch
 
         from .infer import align_with_model
-        from .model import ModelConfig, NoteAligner
+        from .model import NoteAligner, config_from_ckpt
 
         self._align = align_with_model
         self.device = "cpu"
         ck = torch.load(ckpt, map_location=self.device, weights_only=False)
         cfg = ck.get("config", {})
-        self.model = NoteAligner(
-            ModelConfig(
-                d_model=cfg.get("d_model", 192),
-                n_layers=cfg.get("n_layers", 4),
-                matchability=cfg.get("matchability", False),
-            )
-        ).to(self.device)
+        self.model = NoteAligner(config_from_ckpt(cfg, ck["model"])).to(self.device)
         self.model.load_state_dict(ck["model"])
         self.model.eval()
         self.ckpt = ckpt

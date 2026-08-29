@@ -1,0 +1,13 @@
+{
+  "rows": 1689,
+  "detect_p": 0.9459,
+  "detect_r": 0.786,
+  "detect_f": 0.8586,
+  "attr_acc": 0.6478,
+  "attr_n": 3734,
+  "group_exact": 0.4519,
+  "group_n": 1693,
+  "ckpt": "runs/v9fact/best.pt",
+  "corpus": "data/corpus/asap-orn-holdout.jsonl",
+  "tier": "synthetic-only"
+}

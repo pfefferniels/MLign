@@ -57,6 +57,11 @@ def main() -> None:
                     help="train the ornament-attribution head (needs espressivo-rendered "
                          "rows; other sources are ignored by the head's loss)")
     ap.add_argument("--attr-weight", type=float, default=0.2)
+    ap.add_argument("--attr-conditioned", default="", choices=["", "bias", "factored"],
+                    help="let the attribution head read the match head's (detached) "
+                         "insertion decision instead of re-deriving it: 'bias' adds "
+                         "log P(matched) to the none column, 'factored' rebuilds the "
+                         "whole distribution as P(ins)·P(attributable|ins)·P(anchor)")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
     args = ap.parse_args()
@@ -110,7 +115,8 @@ def main() -> None:
     model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers,
                                     matchability=args.matchability,
                                     attribution=args.attribution,
-                                    attr_weight=args.attr_weight)).to(device)
+                                    attr_weight=args.attr_weight,
+                                    attr_conditioned=args.attr_conditioned)).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"model params: {n_params / 1e6:.2f}M", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)

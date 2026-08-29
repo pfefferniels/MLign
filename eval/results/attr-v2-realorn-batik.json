@@ -1,0 +1,13 @@
+{
+  "rows": 225,
+  "detect_p": 0.7409,
+  "detect_r": 0.286,
+  "detect_f": 0.4126,
+  "attr_acc": 0.2136,
+  "attr_n": 4130,
+  "group_exact": 0.0203,
+  "group_n": 740,
+  "ckpt": "models/mlign-v2.pt",
+  "corpus": "data/corpus/realorn-batik.jsonl",
+  "tier": "real-recording"
+}

@@ -9,7 +9,7 @@
  * Usage:
  *   node scripts/corpus/generate.mjs <out.jsonl> <numPieces> <seed>
  *        [--robustness none|light|medium|heavy] [--jitter <stdMs>]
- *        [--ornaments <rate>]        per-eligible-note ornament probability
+ *        [--ornaments <scale>]       ornament density, 1 = the real ASAP rate
  *        [--breadth <f>]             ≥1, widens sampled <temporalSpread>
  *        [--exaggerate [modern|early]]
  *        [--imprecision subtle|natural|early]   MPM imprecisionMap humanisation
@@ -40,6 +40,12 @@ import {
   presetHeavy,
   mergeConfig,
 } from '../../src/robustness/robustness.mjs';
+import {
+  DEFAULTS,
+  buildOrnamentation,
+  injectOrnaments,
+  normalizeOrnaments,
+} from '../../src/corpus/ornaments.mjs';
 import { editsToAlignment, shiftToMatchedZero } from '../../src/robustness/gt.mjs';
 
 const PRESETS = { none: {}, light: presetLight, medium: presetMedium, heavy: presetHeavy };
@@ -47,7 +53,7 @@ const PRESETS = { none: {}, light: presetLight, medium: presetMedium, heavy: pre
 function parseArgs(argv) {
   const pos = [];
   const opt = {
-    robustness: 'medium', jitter: 12, ornaments: 0,
+    robustness: 'medium', jitter: 12, ornaments: 0, addRate: null,
     exaggerate: false, profile: 'modern', breadth: 1, imprecision: '',
   };
   for (let i = 0; i < argv.length; i++) {
@@ -55,6 +61,7 @@ function parseArgs(argv) {
     if (a === '--robustness') opt.robustness = argv[++i];
     else if (a === '--jitter') opt.jitter = Number(argv[++i]);
     else if (a === '--ornaments') opt.ornaments = Number(argv[++i]);
+    else if (a === '--add-rate') opt.addRate = Number(argv[++i]);
     // --exaggerate takes an optional profile name: `--exaggerate early`.
     else if (a === '--exaggerate') {
       opt.exaggerate = true;
@@ -83,105 +90,177 @@ const WANT = { dynamics: true, articulation: true, rubato: true, asynchrony: tru
 const OPT = { twoPartProb: 0.5, asynchronyProb: 1.0, movementProb: 0.5 };
 
 // ---------------------------------------------------------------------------
-// Ornament sampling (MPM v3, meico-ts 05147ed). Injected into the built MPM
-// text: a styleDef trio (trill/mordent/turn) in global/header +
-// an ornamentationMap in global/dated. Pool-note figures per the v3 fixture
-// syntax (note.order referencing pool notes + the principal by noteid).
+// Ornament placement. The FIGURES live in src/corpus/ornaments.mjs, shared with
+// the real-score generator; what stays here is which notes get one, and how
+// many — the axis that was most badly wrong.
 // ---------------------------------------------------------------------------
 
-// frameLength ranges per ornament kind, as a percentage of the principal's
-// duration. `breadth` biases the draw toward the wide end without ever leaving
-// the range (pow(u, 1/breadth)), so a wider setting cannot produce a figure
-// that overruns what espressivo can measure against the principal.
-const SPREAD_PCT = { trill: [55, 100], mordent: [12, 45], turn: [25, 75] };
+/**
+ * How many ornament signs a piece carries, per 1000 score notes.
+ *
+ * Measured over the 203 train-eligible ASAP scores: **4571 ornament EVENTS
+ * over 535 736 sounding notes = 8.53 per 1000**. 14.3 % of scores carry none;
+ * the rest fit a lognormal with median 6.24 and ln-sd 1.04 (per-score
+ * q25/q50/q75 2.00/4.48/11.54, corpus mean 9.14 against 8.53 observed).
+ *
+ * Both halves of that sentence name a place an earlier version of this
+ * constant went wrong, in opposite directions:
+ *
+ * - The DENOMINATOR is sounding notes, not `<note>` elements. 49 011 of the
+ *   latter are rests, which cannot carry an ornament.
+ * - The NUMERATOR is events, not elements. `<arpeggiate>` and `<grace>` are
+ *   written per note — a rolled four-note chord emits four, a grace run one
+ *   per grace — and `<wavy-line>` is not an ornament at all but the trill's
+ *   extension line, 265 of whose 549 occurrences sit in the same
+ *   `<ornaments>` element as the `<trill-mark>` they extend. Counting
+ *   elements rather than events inflates the rate by 42 %.
+ *
+ * The corpus this replaces put 141.8 ornament groups per 1000 score notes into
+ * every single piece, and a third of all played notes belonged to one. A head
+ * trained on that has no way to learn what "not an ornament" looks like, which
+ * is exactly the half that failed to transfer to real recordings.
+ */
+export const ORN_RATE = { zeroProb: 0.143, lnMedian: 1.831, lnSd: 1.036 };
 
-/** One sampled <temporalSpread> — the axis that was previously a constant. */
-function sampleSpread(kind, rng, breadth) {
-  const [lo, hi] = SPREAD_PCT[kind];
-  const length = lo + (hi - lo) * Math.pow(rng.nextDouble(), 1 / breadth);
-  // Placement. Early pianists routinely begin the figure before the notated
-  // onset, so a share of ornaments is anticipated. The offset is in ticks
-  // against a percentage frameLength, which is the MPM spec's own fig.-3
-  // combination (meico-ts ornamentInstantiation.ts:473).
-  const anticipated = rng.nextDouble() < 0.15 + 0.2 * (breadth - 1);
-  const offset = anticipated ? -Math.round(rng.nextDouble() * 180 * breadth) : 0;
-  const shift = rng.nextDouble() < 0.8 ? ' noteoff.shift="monophonic"' : '';
-  return (
-    `<temporalSpread frame.offset="${offset.toFixed(1)}ticks"` +
-    ` frameLength="${length.toFixed(0)}%"${shift} />`
-  );
+/**
+ * Relative frequency of each event kind, from the same census. The ordering is
+ * the finding: grace notes and arpeggios are three quarters of all notated
+ * ornaments in this repertoire, and the corpus had neither.
+ *
+ * `inverted-turn`, `delayed-turn` and `schleifer` do not occur in ASAP at all,
+ * so they stay realizable — a real score may still ask for one — but are never
+ * sampled here.
+ */
+export const ORN_KINDS = [
+  ['grace', 0.498],
+  ['arpeggio', 0.268],
+  ['trill', 0.153],
+  ['inverted-mordent', 0.039],
+  ['turn', 0.034],
+  ['mordent', 0.007],
+];
+
+/**
+ * Notes per grace run: 1452 singles, 500 doubles, 215 triples, 78 fours in
+ * ASAP (mean 1.63). A slide of two or three leaning notes is common enough
+ * that a corpus of only single appoggiaturas would be a different repertoire.
+ */
+export const GRACE_RUN = [[1, 0.638], [2, 0.220], [3, 0.094], [4, 0.048]];
+
+/** Box-Muller — JavaRandom is a port of java.util.Random minus nextGaussian. */
+function gaussian(rng) {
+  const u = Math.max(rng.nextDouble(), 1e-12);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng.nextDouble());
+}
+
+/** Signs per 1000 notes for one piece, drawn from the fitted real distribution. */
+export function sampleOrnRate(rng, scale = 1) {
+  if (rng.nextDouble() < ORN_RATE.zeroProb) return 0;
+  return scale * Math.exp(ORN_RATE.lnMedian + ORN_RATE.lnSd * gaussian(rng));
+}
+
+/** Weighted choice over an `[[value, probability], …]` table. */
+function pick(rng, table) {
+  let u = rng.nextDouble();
+  for (const [value, p] of table) {
+    u -= p;
+    if (u < 0) return value;
+  }
+  return table[table.length - 1][0];
 }
 
 /**
- * Sample ornaments for a piece: candidates = part-1 notes with duration ≥ one
- * quarter, spaced ≥ one quarter apart; each gets trill/mordent/turn.
- * rateP = probability per candidate; `breadth` ≥ 1 widens the temporal spread
- * toward early-recording style.
+ * The pitches of one grace run, leaning stepwise into the principal — which is
+ * what a slide or a double appoggiatura does. A run that just sat on one
+ * neighbour would make the multi-note case indistinguishable from a repeated
+ * single one.
+ */
+function gracePitches(rng, pitch) {
+  const k = pick(rng, GRACE_RUN);
+  const dir = rng.nextDouble() < 0.6 ? -1 : 1; // more often from below
+  const out = [];
+  for (let i = k; i >= 1; i--) out.push(pitch + dir * (i === 1 ? 1 + rng.nextInt(2) : i + rng.nextInt(2)));
+  return out;
+}
+
+/**
+ * Sample ornaments for a piece and realize them.
  *
- * Every ornament gets its OWN ornamentDef, so `<temporalSpread>` can vary per
- * instance. Sharing three fixed defs (the previous shape) left arpeggiation
- * breadth and ornament placement as constants across the whole corpus —
- * precisely the axis this repertoire exercises hardest.
+ * `rateScale` multiplies the drawn per-piece rate — 1 reproduces the ASAP
+ * distribution, and a shard can be deliberately ornament-rich without going
+ * back to "every piece, every long note". A note carries at most one sign, and
+ * the figures that need room (trill, turn) are not placed on notes too short
+ * to hold them.
  *
  * Returns `{ header, map }`, both '' when nothing was sampled.
  */
-export function sampleOrnaments(piece, rng, rateP, breadth = 1) {
+export function sampleOrnaments(piece, rng, rateScale, breadth = 1) {
   const part = piece.parts[0];
-  const entries = [];
-  const defs = [];
-  let lastDate = -1e9;
-  part.notes.forEach((n, i) => {
-    if (n.dur < 720 || n.date - lastDate < 720) return;
-    if (rng.nextDouble() >= rateP) return;
-    lastDate = n.date;
-    const id = `p${part.number}n${i}`;
-    const kind = ['trill', 'mordent', 'turn'][rng.nextInt(3)];
-    const upper = 1 + rng.nextInt(2); // chromatic 1..2 ≈ diatonic neighbor
-    let poolNotes;
-    let order;
-    if (kind === 'trill') {
-      // 2..6 alternation pairs: a broad early-recording trill runs longer
-      // than the 2..4 the corpus had.
-      const reps = 2 + rng.nextInt(Math.round(3 + 2 * (breadth - 1)));
-      poolNotes = `<note xml:id="u" interval.chromatic="${upper}.0" />`;
-      order = Array.from({ length: reps }, () => '#u ' + `#${id}`).join(' ');
-    } else if (kind === 'mordent') {
-      poolNotes = `<note xml:id="u" interval.chromatic="${upper}.0" />`;
-      order = `#${id} #u #${id}`;
-    } else {
-      poolNotes =
-        `<note xml:id="u" interval.chromatic="${upper}.0" />` +
-        `<note xml:id="l" interval.chromatic="-${upper}.0" />`;
-      order = `#u #${id} #l #${id}`;
-    }
-    const defName = `orn${i}`;
-    const alignment = kind === 'turn' || rng.nextDouble() < 0.2 ? 'at end' : 'at start';
-    defs.push(
-      `<ornamentDef name="${defName}" alignment="${alignment}">` +
-        `${sampleSpread(kind, rng, breadth)}</ornamentDef>`,
-    );
-    entries.push(
-      `<ornament date="${n.date.toFixed(1)}" name.ref="${defName}" noteid="#${id}"` +
-        ` note.order="${order}" xml:id="mlorn${i}">${poolNotes}</ornament>`,
-    );
-  });
-  if (entries.length === 0) return { header: '', map: '' };
-  return {
-    header:
-      '<ornamentationStyles><styleDef name="mlignOrns">' +
-      defs.join('') +
-      '</styleDef></ornamentationStyles>',
-    map: `<ornamentationMap><style date="0.0" name.ref="mlignOrns" />${entries.join('')}</ornamentationMap>`,
-  };
-}
+  const total = piece.parts.reduce((a, p) => a + p.notes.length, 0);
+  // Stochastic rounding, not Math.round. A sampled piece is ~95 notes, so the
+  // expected count is well under 1 and rounding to nearest turns "0.4 signs"
+  // into either 0 or 1 with a threshold — which put a floor under the rate and
+  // left the corpus 7× too dense even after the distribution was right.
+  const expected = (sampleOrnRate(rng, rateScale) * total) / 1000;
+  const want = Math.floor(expected) + (rng.nextDouble() < expected % 1 ? 1 : 0);
+  if (want <= 0) return { header: '', map: '' };
 
-/** Splice ornament header + map, and any imprecision maps, into a buildMpm document. */
-export function injectOrnaments(mpmXml, orn, imprecisionXml = '') {
-  const map = (orn && orn.map) || '';
-  if (!map && !imprecisionXml) return mpmXml;
-  let out = mpmXml;
-  if (map) out = out.replace('<global><header />', `<global><header>${orn.header}</header>`);
-  return out.replace('<dated><tempoMap>', `<dated>${map}${imprecisionXml}<tempoMap>`);
+  // Chords, by onset — an arpeggio needs one, and a sampled piece has them at
+  // about 17 % of its onsets.
+  const chords = new Map();
+  part.notes.forEach((n, i) => {
+    const at = chords.get(n.date);
+    if (at) at.push(i);
+    else chords.set(n.date, [i]);
+  });
+  const chordDates = [...chords.entries()].filter(([, v]) => v.length >= 2).map(([d]) => d);
+
+  const requests = [];
+  const taken = new Set();
+  // Rejection sampling over part 1 — cheaper than shuffling, and the retry
+  // budget keeps a piece with few eligible notes from spinning.
+  for (let tries = 0; requests.length < want && tries < want * 20; tries++) {
+    const kind = pick(rng, ORN_KINDS);
+    const id = (i) => `p${part.number}n${i}`;
+
+    if (kind === 'arpeggio') {
+      if (chordDates.length === 0) continue;
+      const date = chordDates[rng.nextInt(chordDates.length)];
+      const members = chords.get(date);
+      if (members.some((i) => taken.has(i))) continue;
+      for (const i of members) taken.add(i);
+      requests.push({
+        msmId: id(members[0]),
+        date,
+        kind,
+        // Low to high: the order the chord is rolled in.
+        chordIds: [...members].sort((a, b) => part.notes[a].pitch - part.notes[b].pitch).map(id),
+        index: requests.length,
+      });
+      continue;
+    }
+
+    const i = rng.nextInt(part.notes.length);
+    if (taken.has(i)) continue;
+    const n = part.notes[i];
+    const durQuarters = n.dur / 720;
+    if ((kind === 'trill' || kind === 'turn') && durQuarters < 0.5) continue;
+    if (durQuarters < 0.125) continue;
+    taken.add(i);
+    requests.push({
+      msmId: id(i),
+      date: n.date,
+      durQuarters,
+      pitch: n.pitch,
+      kind,
+      // A sampled grace has no notated pitch of its own, so the run is drawn
+      // from the real distribution of run lengths and leans into the principal.
+      gracePitches: gracePitches(rng, n.pitch),
+      slashed: rng.nextDouble() < 0.5,
+      index: requests.length,
+    });
+  }
+  return buildOrnamentation(requests, rng, { ...DEFAULTS, breadth });
 }
 
 // ---------------------------------------------------------------------------
@@ -229,41 +308,6 @@ export function sampleImprecision(rng, level) {
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-/**
- * Ornament pre-pass over the facade's PerformanceData (meico-ts ornamentation
- * merge, 05147ed; on older dists the fields are undefined → identity).
- *
- * A note is GENERATED iff its id is not a known score id (generated notes get
- * random meico_<uuid> ids; slot membership is NOT sufficient — the principal
- * itself appears inside the figure with a slot and keeps its score id, and
- * stays a match per D10). Generated notes get id=null + an ornament origin so
- * the robustness layer and editsToAlignment treat them as provenanced
- * insertions. Carved heads keep score ids (match with altered duration).
- */
-export function normalizeOrnaments(data, scoreIdSet) {
-  let touched = false;
-  const parts = data.parts.map((part) => ({
-    ...part,
-    notes: part.notes.map((n) => {
-      if (n.id !== null && scoreIdSet.has(n.id)) return n;
-      if (!n.ornamented && n.id !== null) return n; // unknown non-ornament id: leave as-is
-      touched = true;
-      return {
-        ...n,
-        id: null,
-        origin: {
-          type: 'ornament',
-          anchor: n.ornamentAnchor ?? null,
-          ref: n.ornamentRef ?? null,
-          slot: n.ornamentSlot ?? -1,
-          pass: n.ornamentPass ?? 0,
-        },
-      };
-    }),
-  }));
-  return touched ? { ...data, parts } : data;
-}
-
 // Exaggeration axis (meico-ts-exag branch, pinned 3432d25; dynamic import so
 // the generator still runs where the worktree is absent).
 const EXAG_DIST = '/Users/nielspfeffer/Projects/meico-ts/dist/index.js'; // main @ 9974ba3
@@ -307,7 +351,7 @@ export function buildSample(piece, robustnessCfg, seedStr, ornDefs = null, exagF
   for (const part of piece.parts) {
     for (let i = 0; i < part.notes.length; i++) scoreIdSet.add(`p${part.number}n${i}`);
   }
-  const clean = normalizeOrnaments(rendered, scoreIdSet);
+  const { data: clean } = normalizeOrnaments(rendered, scoreIdSet);
 
   const { data, edits } = applyRobustness(clean, robustnessCfg, seedStr);
   const { alignment, perfNotes, unattributed } = editsToAlignment(data, edits);
@@ -382,7 +426,19 @@ async function main() {
   if (args.exaggerate) await loadExaggeration();
   const preset = PRESETS[args.robustness];
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
-  const cfg = mergeConfig({ ...preset, jitter: { stdMs: args.jitter } });
+  // The robustness layer's consonant additions land in the SAME attribution
+  // channel as espressivo's ornaments — an added octave elaborates its anchor
+  // exactly as a trill note does — so their rate is part of the ornament base
+  // rate, not just an alignment-robustness setting. `medium` puts 25 of them
+  // per 1000 notes, 3× the real ornament rate, which is how the attribution
+  // head came to be trained on a world where added notes are the common case.
+  // Overridable rather than changed in the preset: the presets define what the
+  // existing corpora mean.
+  const cfg = mergeConfig({
+    ...preset,
+    jitter: { stdMs: args.jitter },
+    ...(args.addRate === null ? {} : { add: { ...preset.add, rate: args.addRate } }),
+  });
 
   // Synchronous writes: the generation loop is pure sync compute and never
   // yields to the event loop, so a stream would buffer EVERYTHING in memory

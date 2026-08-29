@@ -1,0 +1,13 @@
+{
+  "rows": 4000,
+  "detect_p": 0.9602,
+  "detect_r": 0.8288,
+  "detect_f": 0.8897,
+  "attr_acc": 0.7247,
+  "attr_n": 8144,
+  "group_exact": 0.5503,
+  "group_n": 4005,
+  "ckpt": "runs/v9bias/best.pt",
+  "corpus": "data/corpus/orn-holdout.jsonl",
+  "tier": "synthetic-only"
+}

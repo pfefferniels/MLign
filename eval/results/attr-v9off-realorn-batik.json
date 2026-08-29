@@ -1,0 +1,13 @@
+{
+  "rows": 225,
+  "detect_p": 0.8922,
+  "detect_r": 0.7133,
+  "detect_f": 0.7928,
+  "attr_acc": 0.6528,
+  "attr_n": 4130,
+  "group_exact": 0.1216,
+  "group_n": 740,
+  "ckpt": "runs/v9off/best.pt",
+  "corpus": "data/corpus/realorn-batik.jsonl",
+  "tier": "real-recording"
+}

@@ -1,0 +1,13 @@
+{
+  "rows": 225,
+  "detect_p": 0.7623,
+  "detect_r": 0.1474,
+  "detect_f": 0.247,
+  "attr_acc": 0.1204,
+  "attr_n": 3047,
+  "group_exact": 0.033,
+  "group_n": 787,
+  "ckpt": "models/mlign-v2.pt",
+  "corpus": "data/corpus/realorn-asap.jsonl",
+  "tier": "real-recording"
+}

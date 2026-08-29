@@ -1,0 +1,13 @@
+{
+  "rows": 4000,
+  "detect_p": 0.8614,
+  "detect_r": 0.6406,
+  "detect_f": 0.7348,
+  "attr_acc": 0.4884,
+  "attr_n": 9838,
+  "group_exact": 0.2628,
+  "group_n": 3999,
+  "ckpt": "models/mlign-v2.pt",
+  "corpus": "data/corpus/orn-shift-holdout.jsonl",
+  "tier": "synthetic-only"
+}

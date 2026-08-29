@@ -148,18 +148,12 @@ def main(argv=None) -> None:
         import torch
 
         from .infer import align_with_model
-        from .model import ModelConfig, NoteAligner
+        from .model import NoteAligner, config_from_ckpt
 
         device = "cpu"  # inference is light; CPU avoids MPS allocator quirks
         ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
         cfg = ckpt.get("config", {})
-        model = NoteAligner(
-            ModelConfig(
-                d_model=cfg.get("d_model", 192),
-                n_layers=cfg.get("n_layers", 4),
-                matchability=cfg.get("matchability", False),
-            )
-        ).to(device)
+        model = NoteAligner(config_from_ckpt(cfg, ckpt["model"])).to(device)
         model.load_state_dict(ckpt["model"])
         model.eval()
         triples = align_with_model(model, score, perf, device)

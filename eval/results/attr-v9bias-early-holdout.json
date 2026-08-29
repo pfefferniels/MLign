@@ -1,0 +1,13 @@
+{
+  "rows": 2000,
+  "detect_p": 0.982,
+  "detect_r": 0.9039,
+  "detect_f": 0.9414,
+  "attr_acc": 0.8709,
+  "attr_n": 77218,
+  "group_exact": 0.6277,
+  "group_n": 19726,
+  "ckpt": "runs/v9bias/best.pt",
+  "corpus": "data/corpus/early-holdout.jsonl",
+  "tier": "synthetic-only"
+}

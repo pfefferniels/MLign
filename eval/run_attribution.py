@@ -1,14 +1,23 @@
 """Ornament attribution: how well does the model say WHICH score note a played
 ornament note belongs to.
 
-This tier is synthetic-only, and not by preference. No real corpus annotates
-ornament→principal attribution: ASAP's 1063 match files contain zero
-`ornament(` lines, and Vienna 4x22 (88) and Batik (36) contain zero despite
-using the match format version that supports an anchor. Held-out espressivo
-renders are therefore the only ground truth that exists, so the numbers here
-say "the head learned the generator's ornament model", NOT "the head works on
-early recordings". Read them as a capability check, never as a benchmark
-result, and keep the generation seed disjoint from training.
+Two tiers, and the distinction is the whole point of reading these numbers.
+
+**Synthetic (default).** Held-out espressivo renders, `meta.gen = mlign-*`,
+with exhaustive provenance. They say "the head learned the generator's ornament
+model", NOT "the head works on real recordings" — a holdout drawn from the same
+generator measures the generator. Keep the generation seed disjoint from
+training.
+
+**Real recordings (`--real-orn`).** `meta.gen = realorn-*`, derived from
+Nakamura match files by `scripts/corpus/real_orn_gt.py`. The long-standing
+claim that no real corpus annotates ornament→principal attribution was wrong:
+it is true that there are zero `ornament(` lines anywhere, but both ASAP and
+Batik put the sign in the **snote's attribute list** and the played ornament
+notes follow as `insertion-note` lines. Those labels are PARTIAL — an
+unattributed insertion means the derivation could not resolve it, not that the
+note is ordinary — so such notes are ignored rather than scored, and the rows
+are deliberately not `mlign-*` so training can never pick them up.
 
 Reported:
   detect P/R/F  is this played note part of an ornament at all
@@ -36,21 +45,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from mlign.dataset import collate, featurize, parse_row  # noqa: E402
-from mlign.model import ModelConfig, NoteAligner  # noqa: E402
+from mlign.model import NoteAligner, config_from_ckpt  # noqa: E402
 
 
 def load_model(ckpt_path: str, device: str) -> NoteAligner:
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     sd = ckpt.get("model", ckpt)
-    cfg = ckpt.get("config") or {}
-    model = NoteAligner(
-        ModelConfig(
-            d_model=cfg.get("d_model", 192),
-            n_layers=cfg.get("n_layers", 4),
-            matchability=cfg.get("matchability", False),
-            attribution=True,
-        )
-    )
+    model = NoteAligner(config_from_ckpt(ckpt.get("config"), attribution=True))
     missing, unexpected = model.load_state_dict(sd, strict=False)
     attr_missing = [k for k in missing if k.startswith("attr_")]
     if attr_missing:
@@ -61,14 +62,14 @@ def load_model(ckpt_path: str, device: str) -> NoteAligner:
     return model.to(device).eval()
 
 
-def evaluate(model: NoteAligner, rows: list, device: str, batch: int) -> dict:
+def evaluate(model: NoteAligner, rows: list, device: str, batch: int, real_orn: bool = False) -> dict:
     det_tp = det_fp = det_fn = 0
     attr_hit = attr_tot = 0
     groups_exact = groups_tot = 0
     rows_seen = 0
 
     for start in range(0, len(rows), batch):
-        chunk = [featurize(parse_row(r)) for r in rows[start : start + batch]]
+        chunk = [featurize(parse_row(r), real_orn=real_orn) for r in rows[start : start + batch]]
         b = collate(chunk, device)
         if "target_attr" not in b:
             continue
@@ -131,19 +132,25 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", default="")
+    ap.add_argument("--real-orn", action="store_true",
+                    help="also score realorn-* rows: ornament ground truth derived from "
+                         "Nakamura match files on REAL recordings. Their labels are partial "
+                         "(an unattributed insertion means unresolved, not 'not an ornament'), "
+                         "so those notes are ignored rather than counted against the model")
     args = ap.parse_args()
 
     rows = [l for l in open(args.corpus, "rb") if l.strip()]
     if args.limit:
         rows = rows[: args.limit]
+    prefixes = ("mlign-", "realorn-") if args.real_orn else ("mlign-",)
     provenanced = [
         r for r in rows
-        if str(parse_row(r).get("meta", {}).get("gen", "")).startswith("mlign-")
+        if str(parse_row(r).get("meta", {}).get("gen", "")).startswith(prefixes)
     ]
     if not provenanced:
         raise SystemExit(
-            f"{args.corpus} has no espressivo-rendered rows (meta.gen = mlign-*), so it "
-            "carries no ornament ground truth. Attribution cannot be scored on it."
+            f"{args.corpus} has no rows with ornament ground truth (meta.gen = "
+            f"{' or '.join(p + '*' for p in prefixes)}). Attribution cannot be scored on it."
         )
     if len(provenanced) < len(rows):
         print(
@@ -152,8 +159,10 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    res = evaluate(load_model(args.ckpt, args.device), provenanced, args.device, args.batch)
-    res |= {"ckpt": args.ckpt, "corpus": args.corpus, "tier": "synthetic-only"}
+    res = evaluate(load_model(args.ckpt, args.device), provenanced, args.device, args.batch,
+                   real_orn=args.real_orn)
+    res |= {"ckpt": args.ckpt, "corpus": args.corpus,
+            "tier": "real-recording" if args.real_orn else "synthetic-only"}
     print(json.dumps(res, indent=2))
     if args.out:
         Path(args.out).write_text(json.dumps(res, indent=2) + "\n")

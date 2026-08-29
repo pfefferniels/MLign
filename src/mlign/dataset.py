@@ -38,8 +38,14 @@ def parse_row(row: bytes | dict) -> dict:
     return json.loads(row) if isinstance(row, (bytes, str)) else row
 
 
-def featurize(row: dict) -> dict:
-    """One corpus row → numpy arrays (unpadded)."""
+def featurize(row: dict, real_orn: bool = False) -> dict:
+    """One corpus row → numpy arrays (unpadded).
+
+    `real_orn` opts into the PARTIAL attribution labels of `realorn-*` rows
+    (real recordings, ground truth derived from match files). It exists so that
+    evaluation can read them and training cannot: the default leaves those rows
+    entirely unsupervised, which is the behaviour every training run has had.
+    """
     score = np.asarray(row["score"], dtype=np.float64)  # [onset_t, dur_t, pitch, voice]
     perf = np.asarray(row["perf"], dtype=np.float64)  # [onset_ms, dur_ms, pitch, vel]
     n, m = len(score), len(perf)
@@ -95,13 +101,35 @@ def featurize(row: dict) -> dict:
     # "unknown", not "none". Supervising them would teach the head that real
     # trills are not ornaments, which is the one label error that would make
     # the head useless on exactly the material we care about.
-    provenanced = str(row.get("meta", {}).get("gen", "")).startswith("mlign-")
-    target_attr = np.full(m, -1 if provenanced else -2, dtype=np.int64)
-    if provenanced:
+    gen = str(row.get("meta", {}).get("gen", ""))
+    target_attr = np.full(m, -2, dtype=np.int64)
+    if gen.startswith("mlign-"):
+        target_attr[:] = -1  # exhaustive: anything not named below is genuinely not one
         for rec in row.get("orn", ()):
             pi, anchor = int(rec[0]), int(rec[1])
             # anchor < 0 = the generator lost the principal (ornament on a note
             # that itself got deleted). Ignore rather than call it "none".
+            target_attr[pi] = anchor if anchor >= 0 else -2
+    elif real_orn and gen.startswith("realorn-"):
+        # Ornament ground truth derived from Nakamura match files — REAL
+        # recordings, and the only real-music attribution labels that exist. The
+        # labels are PARTIAL, so the three cases have to be kept apart:
+        #   matched notes            → "none". A played note the aligner tied to
+        #                              a written note is not an inserted ornament
+        #                              note (a trill's principal is matched, and
+        #                              is correctly not part of its own figure).
+        #   insertions named in `orn` → their anchor.
+        #   insertions NOT named     → IGNORE. Unattributed here means the
+        #                              derivation could not resolve it, not that
+        #                              it is ordinary. Scoring these as "none"
+        #                              would count real ornament notes as false
+        #                              positives and flatter every model.
+        # Off by default and never reachable from training, which is what keeps
+        # partial labels out of the loss.
+        for si, pi in row["align"]:
+            target_attr[int(pi)] = -1
+        for rec in row.get("orn", ()):
+            pi, anchor = int(rec[0]), int(rec[1])
             target_attr[pi] = anchor if anchor >= 0 else -2
 
     return {

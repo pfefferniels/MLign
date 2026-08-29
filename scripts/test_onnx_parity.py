@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from export_onnx import INPUT_NAMES, Enc, EncDustbin, load_model  # noqa: E402
 from mlign.dataset import MARKER_PITCH, featurize  # noqa: E402
 from mlign import infer  # noqa: E402
+from mlign.model import NoteAligner  # noqa: E402
 from mlign.tables import PerfTable, ScoreTable  # noqa: E402
 
 # fp32 weights round-trip to ~1e-5; --fp16 weight storage costs ~2e-3 on the
@@ -90,6 +91,58 @@ def check_tensor_sweep(sess: ort.InferenceSession, wrapper: torch.nn.Module,
     return max(worst, scale_err)
 
 
+def _logsumexp(x: np.ndarray) -> np.ndarray:
+    mx = x.max(axis=-1, keepdims=True)
+    return mx + np.log(np.exp(x - mx).sum(axis=-1, keepdims=True))
+
+
+def _log_softmax(x: np.ndarray) -> np.ndarray:
+    return x - _logsumexp(x)
+
+
+def _logsigmoid(x: np.ndarray) -> np.ndarray:
+    return -np.logaddexp(0.0, -x)
+
+
+def rebuild_logits_attr(got: dict[str, np.ndarray], n: int, m: int) -> np.ndarray:
+    """The sidecar's `head.attribution`, written out in numpy — (m, n + 1).
+
+    Deliberately built from the graph outputs and nothing else, the way the
+    TypeScript host will have to: if this needed anything from `NoteAligner`,
+    the sidecar would be incomplete. Which mode the checkpoint was trained with
+    is read off the outputs the graph carries, again as a host would.
+
+    The conditioned modes fold in the match head's own verdict, taken from the
+    p->s logits the host already holds — here a single window, so those rows are
+    the full ones and the conditioning applies directly.
+    """
+    attr_s = got["attr_s"][0][1:1 + n]              # (n, d)
+    attr_p = got["attr_p"][0][2 + n:2 + n + m]      # (m, d)
+    row = np.concatenate(
+        [attr_p @ attr_s.T, (attr_p @ got["attr_none"])[:, None]], axis=1
+    ) * float(got["attr_scale"])
+    if "attr_cond_w" not in got and "attr_gate" not in got:
+        return row
+
+    s_vec = got["s"][0][1:1 + n]
+    p_vec = got["p"][0][2 + n:2 + n + m]
+    null_row = got["match_p"][0, 2 + n:2 + n + m]   # (m, 1), already scaled
+    lp = _log_softmax(np.concatenate([p_vec @ s_vec.T * float(got["scale"]), null_row], axis=1))
+    log_ins = np.maximum(lp[:, -1:], NoteAligner.LOG_FLOOR)
+    log_matched = np.maximum(_logsumexp(lp[:, :-1]), NoteAligner.LOG_FLOOR)
+
+    if "attr_cond_w" in got:
+        return np.concatenate(
+            [row[:, :-1], row[:, -1:] + float(got["attr_cond_w"]) * log_matched], axis=1)
+    # "factored": the learned none column is unused, and the result is already
+    # a log-distribution rather than logits.
+    rank = row[:, :-1]
+    gate = got["attr_gate"][0, 2 + n:2 + n + m]     # (m, 1)
+    return np.concatenate(
+        [log_ins + _logsigmoid(gate) + rank - _logsumexp(rank),
+         np.logaddexp(log_ins + _logsigmoid(-gate), log_matched)], axis=1)
+
+
 def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol: float) -> float:
     """The sidecar's attribution formula against `NoteAligner.forward` itself.
 
@@ -98,11 +151,18 @@ def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol
     the head. It is the same distinction as (1) versus (2) for the match head,
     and for the same reason: a host can hold correct vectors and still build the
     wrong matrix out of them.
+
+    With a conditioned head that is the larger half of the claim: the row is no
+    longer the attribution head alone but a combination of both heads, and the
+    combination lives entirely in the sidecar prose.
     """
     names = [o.name for o in sess.get_outputs()]
     if "attr_s" not in names:
         print("  (no attribution head in this graph)")
         return 0.0
+    mode = "factored" if "attr_gate" in names else ("bias" if "attr_cond_w" in names else "")
+    print(f"  attr_conditioned={mode!r}"
+          + (" — logits_attr rebuilt from BOTH heads" if mode else ""))
 
     rng = np.random.default_rng(1)
     worst = 0.0
@@ -119,12 +179,7 @@ def check_attribution(sess: ort.InferenceSession, model, lengths: list[int], tol
                 "n_perf": torch.tensor([m]),
             })["logits_attr"][0].numpy()
 
-        got = dict(zip(names, sess.run(None, feed)))
-        attr_s = got["attr_s"][0][1:1 + n]              # (n, d)
-        attr_p = got["attr_p"][0][2 + n:2 + n + m]      # (m, d)
-        rebuilt = np.concatenate(
-            [attr_p @ attr_s.T, (attr_p @ got["attr_none"])[:, None]], axis=1
-        ) * float(got["attr_scale"])
+        rebuilt = rebuild_logits_attr(dict(zip(names, sess.run(None, feed))), n, m)
 
         # Relative, like the accumulated-logit check and for the same reason:
         # this is a matrix of 192-term dot products, so its entries are two
@@ -292,6 +347,8 @@ def main() -> None:
     assert meta["model"]["d_model"] == model.cfg.d_model, "sidecar d_model disagrees with the checkpoint"
     assert meta["model"]["matchability"] == model.cfg.matchability, "sidecar matchability disagrees"
     assert meta["model"].get("attribution", False) == model.cfg.attribution, "sidecar attribution disagrees"
+    assert meta["model"].get("attr_conditioned", "") == model.cfg.attr_conditioned, \
+        "sidecar attr_conditioned disagrees"
     assert abs(meta["head"]["scale"] - float(model.scale.detach())) < 1e-9, "sidecar scale disagrees"
     storage = meta["model"]["weight_storage"]
     tol = TOL[storage]

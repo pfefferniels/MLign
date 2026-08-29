@@ -1,0 +1,603 @@
+{
+  "aggregate": {
+    "match_f": 0.9895660184253687,
+    "match_p": 0.9894922626928297,
+    "match_r": 0.9896422043933674,
+    "insertion_f": 0.9523890654361133,
+    "deletion_f": 0.8912813474334226,
+    "n": 84,
+    "failures": 0,
+    "aligner": "model:runs/v9fact/best.pt",
+    "seconds": 1672.6
+  },
+  "rows": [
+    {
+      "piece": "Bach/Fugue/bwv_858",
+      "performer": "VuV01M",
+      "match_f": 0.9908361970217641,
+      "insertion_f": 1.0,
+      "deletion_f": 0.8333333333333334
+    },
+    {
+      "piece": "Bach/Fugue/bwv_858",
+      "performer": "Zhang01M",
+      "match_f": 0.9835880022637238,
+      "insertion_f": 0.888888888888889,
+      "deletion_f": 0.7200000000000001
+    },
+    {
+      "piece": "Bach/Fugue/bwv_862",
+      "performer": "Song04M",
+      "match_f": 0.9970980847359256,
+      "insertion_f": 0.923076923076923,
+      "deletion_f": 0.9841269841269841
+    },
+    {
+      "piece": "Bach/Fugue/bwv_863",
+      "performer": "LeeN01M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Bach/Fugue/bwv_863",
+      "performer": "Shychko01M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Bach/Fugue/bwv_863",
+      "performer": "TongB01M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Bach/Fugue/bwv_873",
+      "performer": "Lisiecki02",
+      "match_f": 0.9940696812453669,
+      "insertion_f": 0.9444444444444444,
+      "deletion_f": 0.9166666666666666
+    },
+    {
+      "piece": "Bach/Fugue/bwv_873",
+      "performer": "Lisiecki13M",
+      "match_f": 0.9948148148148147,
+      "insertion_f": 0.9666666666666666,
+      "deletion_f": 0.9565217391304348
+    },
+    {
+      "piece": "Bach/Fugue/bwv_891",
+      "performer": "Duepree06M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Bach/Prelude/bwv_858",
+      "performer": "VuV01M",
+      "match_f": 0.9859484777517564,
+      "insertion_f": 1.0,
+      "deletion_f": 0.4000000000000001
+    },
+    {
+      "piece": "Bach/Prelude/bwv_858",
+      "performer": "Zhang01M",
+      "match_f": 0.9710312862108923,
+      "insertion_f": 0.9541284403669724,
+      "deletion_f": 0.5454545454545454
+    },
+    {
+      "piece": "Bach/Prelude/bwv_862",
+      "performer": "Song04M",
+      "match_f": 0.9880952380952381,
+      "insertion_f": 1.0,
+      "deletion_f": 0.5333333333333333
+    },
+    {
+      "piece": "Bach/Prelude/bwv_863",
+      "performer": "LeeN01M",
+      "match_f": 0.992831541218638,
+      "insertion_f": 1.0,
+      "deletion_f": 0.8823529411764706
+    },
+    {
+      "piece": "Bach/Prelude/bwv_863",
+      "performer": "Shychko01M",
+      "match_f": 0.9911032028469751,
+      "insertion_f": 1.0,
+      "deletion_f": 0.6923076923076923
+    },
+    {
+      "piece": "Bach/Prelude/bwv_863",
+      "performer": "TongB01M",
+      "match_f": 0.9964476021314387,
+      "insertion_f": 1.0,
+      "deletion_f": 0.8333333333333334
+    },
+    {
+      "piece": "Bach/Prelude/bwv_873",
+      "performer": "Lisiecki02",
+      "match_f": 0.9427347097779509,
+      "insertion_f": 0.87248322147651,
+      "deletion_f": 0.814352574102964
+    },
+    {
+      "piece": "Bach/Prelude/bwv_873",
+      "performer": "Lisiecki13M",
+      "match_f": 0.9403508771929825,
+      "insertion_f": 0.8609271523178808,
+      "deletion_f": 0.8180404354587869
+    },
+    {
+      "piece": "Bach/Prelude/bwv_891",
+      "performer": "BLINOV04M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Bach/Prelude/bwv_891",
+      "performer": "Duepree06M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/10-1",
+      "performer": "Hou02M",
+      "match_f": 0.9992223950233281,
+      "insertion_f": 0.9459459459459459,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/12-1",
+      "performer": "Garritson01",
+      "match_f": 0.9984797810884767,
+      "insertion_f": 0.9705882352941176,
+      "deletion_f": 0.9565217391304348
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/12-1",
+      "performer": "Kleisen05M",
+      "match_f": 0.9960184742793439,
+      "insertion_f": 0.9908256880733944,
+      "deletion_f": 0.9610983981693364
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/12-1",
+      "performer": "Zhao02",
+      "match_f": 0.997844827586207,
+      "insertion_f": 0.9803921568627451,
+      "deletion_f": 0.9636363636363636
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "BuiJL02M",
+      "match_f": 0.9864168618266979,
+      "insertion_f": 0.8617886178861789,
+      "deletion_f": 0.9280397022332506
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "Khmara01",
+      "match_f": 0.9987816021931161,
+      "insertion_f": 1.0,
+      "deletion_f": 0.9669421487603306
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "Khmara05M",
+      "match_f": 0.9978593272171253,
+      "insertion_f": 0.967741935483871,
+      "deletion_f": 0.9626865671641791
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "LeeSH02M",
+      "match_f": 0.9990988284770201,
+      "insertion_f": 0.975609756097561,
+      "deletion_f": 0.9733333333333334
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "Shybayeva02",
+      "match_f": 0.9988066825775657,
+      "insertion_f": 0.9607843137254902,
+      "deletion_f": 0.9615384615384616
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "Woo01",
+      "match_f": 0.9981949458483754,
+      "insertion_f": 0.9629629629629629,
+      "deletion_f": 0.9500000000000001
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-1",
+      "performer": "Woo05M",
+      "match_f": 0.9978494623655914,
+      "insertion_f": 0.9803921568627451,
+      "deletion_f": 0.959731543624161
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/16-2",
+      "performer": "LuoJ04M",
+      "match_f": 0.875705589374654,
+      "insertion_f": 0.694300518134715,
+      "deletion_f": 0.5978987583572111
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "Avdeeva01",
+      "match_f": 0.9756326148078727,
+      "insertion_f": 0.9523809523809524,
+      "deletion_f": 0.6333333333333333
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "ChenGuang03M",
+      "match_f": 0.9899396378269618,
+      "insertion_f": 0.8955223880597015,
+      "deletion_f": 0.7513812154696133
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "LeungR02M",
+      "match_f": 0.9900435594275047,
+      "insertion_f": 0.9130434782608695,
+      "deletion_f": 0.7757009345794392
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "Smirnov01",
+      "match_f": 0.9933920704845814,
+      "insertion_f": 1.0,
+      "deletion_f": 0.8601398601398601
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "ZhangH01",
+      "match_f": 0.9923040678498508,
+      "insertion_f": 0.9824561403508771,
+      "deletion_f": 0.829090909090909
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-1",
+      "performer": "ZhangH05M",
+      "match_f": 0.9915147705845381,
+      "insertion_f": 0.967741935483871,
+      "deletion_f": 0.841726618705036
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-4",
+      "performer": "ChenGuang06M",
+      "match_f": 0.9922549895740244,
+      "insertion_f": 0.9861111111111112,
+      "deletion_f": 0.8000000000000002
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/18-4",
+      "performer": "KOLESO06M",
+      "match_f": 0.9917184265010353,
+      "insertion_f": 0.9733333333333333,
+      "deletion_f": 0.7472527472527473
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/3-2",
+      "performer": "MiyashitaM04M",
+      "match_f": 0.9951590594744122,
+      "insertion_f": 0.9032258064516129,
+      "deletion_f": 0.9166666666666666
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/5-1",
+      "performer": "Colafelice02M",
+      "match_f": 0.9966232513265798,
+      "insertion_f": 0.9736842105263158,
+      "deletion_f": 0.8888888888888888
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/5-1",
+      "performer": "SunD02M",
+      "match_f": 0.9975961538461537,
+      "insertion_f": 0.9393939393939393,
+      "deletion_f": 0.8684210526315789
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/5-1",
+      "performer": "Wong01",
+      "match_f": 0.9951783992285439,
+      "insertion_f": 1.0,
+      "deletion_f": 0.7727272727272727
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/8-1",
+      "performer": "ChenS01",
+      "match_f": 0.9986213235294118,
+      "insertion_f": 1.0,
+      "deletion_f": 0.9439252336448598
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/8-1",
+      "performer": "Na06M",
+      "match_f": 0.9953401677539608,
+      "insertion_f": 0.9922480620155039,
+      "deletion_f": 0.9461077844311377
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/8-3",
+      "performer": "Na06M",
+      "match_f": 0.998740025199496,
+      "insertion_f": 0.9767441860465116,
+      "deletion_f": 0.9
+    },
+    {
+      "piece": "Beethoven/Piano_Sonatas/9-3",
+      "performer": "Tysman05M",
+      "match_f": 0.9977116704805492,
+      "insertion_f": 0.96,
+      "deletion_f": 0.9534883720930233
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Bult-ItoS04M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Floril02",
+      "match_f": 0.9934386391251518,
+      "insertion_f": 0.9558232931726908,
+      "deletion_f": 0.851063829787234
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Gintov02",
+      "match_f": 0.9987766087594813,
+      "insertion_f": 0.9849246231155778,
+      "deletion_f": 0.9599999999999999
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Hirata02",
+      "match_f": 0.9995178399228544,
+      "insertion_f": 0.9787234042553191,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "HuNY03M",
+      "match_f": 0.9975728155339806,
+      "insertion_f": 0.96875,
+      "deletion_f": 0.9047619047619048
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "KimBenjamin04",
+      "match_f": 0.9985401459854014,
+      "insertion_f": 0.9902912621359223,
+      "deletion_f": 0.9230769230769231
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "LuoJ08M",
+      "match_f": 0.9985272459499264,
+      "insertion_f": 1.0,
+      "deletion_f": 0.9318181818181818
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Mordvinov04",
+      "match_f": 0.9968207385668869,
+      "insertion_f": 0.9637305699481865,
+      "deletion_f": 0.9315068493150684
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Na_2006_02",
+      "match_f": 0.9982889269127352,
+      "insertion_f": 0.9685534591194969,
+      "deletion_f": 0.9859154929577464
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Staupe02",
+      "match_f": 0.9995114802149487,
+      "insertion_f": 1.0,
+      "deletion_f": 0.9705882352941176
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "WuuE06M",
+      "match_f": 0.9985436893203884,
+      "insertion_f": 1.0,
+      "deletion_f": 0.9047619047619048
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "Yarden04",
+      "match_f": 0.998777804937668,
+      "insertion_f": 0.9734513274336283,
+      "deletion_f": 0.9577464788732395
+    },
+    {
+      "piece": "Chopin/Etudes_op_10/12",
+      "performer": "ZhangYunling02M",
+      "match_f": 1.0,
+      "insertion_f": 1.0,
+      "deletion_f": 1.0
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "CaoJ03M",
+      "match_f": 0.9807717124790296,
+      "insertion_f": 0.8843537414965986,
+      "deletion_f": 0.9067245119305857
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Goldberg02",
+      "match_f": 0.974541751527495,
+      "insertion_f": 0.9258555133079848,
+      "deletion_f": 0.8926553672316384
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "HAGINO03",
+      "match_f": 0.9853883619584722,
+      "insertion_f": 0.9373219373219372,
+      "deletion_f": 0.9117647058823529
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Huang17M",
+      "match_f": 0.9852003062005614,
+      "insertion_f": 0.8768115942028986,
+      "deletion_f": 0.8924731182795699
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Hwang03",
+      "match_f": 0.9831814096803185,
+      "insertion_f": 0.8933002481389579,
+      "deletion_f": 0.8931116389548693
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Kim02",
+      "match_f": 0.9824381489552622,
+      "insertion_f": 0.8861283643892339,
+      "deletion_f": 0.9046454767726162
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Ladid02",
+      "match_f": 0.9764840472861319,
+      "insertion_f": 0.9071618037135278,
+      "deletion_f": 0.8571428571428572
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "LeungM06M",
+      "match_f": 0.9834838709677418,
+      "insertion_f": 0.9183673469387754,
+      "deletion_f": 0.9217391304347826
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "MCVEY02",
+      "match_f": 0.9807269434743241,
+      "insertion_f": 0.9473684210526316,
+      "deletion_f": 0.8977035490605428
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "MorozovY03",
+      "match_f": 0.9821109123434705,
+      "insertion_f": 0.9250814332247557,
+      "deletion_f": 0.8854166666666665
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Qin03",
+      "match_f": 0.9797734627831716,
+      "insertion_f": 0.9276218611521418,
+      "deletion_f": 0.9269521410579346
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "SUDBIN02",
+      "match_f": 0.9863607393244104,
+      "insertion_f": 0.944,
+      "deletion_f": 0.9315068493150686
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Shamray02",
+      "match_f": 0.9800102511532548,
+      "insertion_f": 0.921146953405018,
+      "deletion_f": 0.8817733990147784
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Tran02",
+      "match_f": 0.9782410423452769,
+      "insertion_f": 0.9395973154362416,
+      "deletion_f": 0.9121495327102804
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Uiasiuk03",
+      "match_f": 0.9803921568627452,
+      "insertion_f": 0.9249563699825479,
+      "deletion_f": 0.8796068796068794
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/10",
+      "performer": "Yeletskiy03",
+      "match_f": 0.983388704318937,
+      "insertion_f": 0.8951965065502184,
+      "deletion_f": 0.8802083333333335
+    },
+    {
+      "piece": "Liszt/Transcendental_Etudes/3",
+      "performer": "Huang14M",
+      "match_f": 0.9968034096963239,
+      "insertion_f": 0.9411764705882354,
+      "deletion_f": 0.9074074074074073
+    },
+    {
+      "piece": "Rachmaninoff/Preludes_op_23/6",
+      "performer": "Nikiforov14M",
+      "match_f": 0.9950657894736842,
+      "insertion_f": 0.8125000000000001,
+      "deletion_f": 0.9111111111111111
+    },
+    {
+      "piece": "Schumann/Toccata",
+      "performer": "BENABD04",
+      "match_f": 0.9938056851930419,
+      "insertion_f": 0.971297359357061,
+      "deletion_f": 0.9778565101860053
+    },
+    {
+      "piece": "Schumann/Toccata",
+      "performer": "BENABD10",
+      "match_f": 0.9932988378997369,
+      "insertion_f": 0.9776915615906887,
+      "deletion_f": 0.9688888888888889
+    },
+    {
+      "piece": "Schumann/Toccata",
+      "performer": "Dulu03",
+      "match_f": 0.9932398174750718,
+      "insertion_f": 0.9206349206349206,
+      "deletion_f": 0.9851851851851853
+    },
+    {
+      "piece": "Schumann/Toccata",
+      "performer": "DupreeF13M",
+      "match_f": 0.9882927650972796,
+      "insertion_f": 0.9386892177589852,
+      "deletion_f": 0.9663784822286263
+    },
+    {
+      "piece": "Schumann/Toccata_repeat",
+      "performer": "WangY07M",
+      "match_f": 0.9916936148627226,
+      "insertion_f": 0.9592641261498028,
+      "deletion_f": 0.9668313338038108
+    },
+    {
+      "piece": "Schumann/Toccata_repeat",
+      "performer": "Zhdanov06",
+      "match_f": 0.9855371900826446,
+      "insertion_f": 0.923076923076923,
+      "deletion_f": 0.9470588235294117
+    }
+  ]
+}

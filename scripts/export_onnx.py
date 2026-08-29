@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from mlign import infer  # noqa: E402
 from mlign.dataset import MARKER_PITCH  # noqa: E402
-from mlign.model import ModelConfig, NoteAligner  # noqa: E402
+from mlign.model import ModelConfig, NoteAligner, config_from_ckpt  # noqa: E402
 
 INPUT_NAMES = ["pitch", "cont", "segment", "position"]
 # The per-token ones come first, because they are the ones with a dynamic axis.
@@ -50,14 +50,26 @@ OUTPUT_NAMES = [*PER_TOKEN_OUTPUTS, "scale"]
 # working, and one that wants attribution asks for the extra names.
 ATTR_PER_TOKEN_OUTPUTS = ["attr_s", "attr_p"]
 ATTR_OUTPUT_NAMES = [*ATTR_PER_TOKEN_OUTPUTS, "attr_none", "attr_scale"]
+# The same rule one level down: a conditioned checkpoint adds its one extra
+# tensor after the whole attribution block, so a host written against the v2
+# attribution contract reads the same names at the same positions. Which is
+# also why `attr_gate` trails the non-dynamic `attr_none`/`attr_scale` instead
+# of joining the per-token group at the front.
+COND_OUTPUT_NAMES = {"bias": ["attr_cond_w"], "factored": ["attr_gate"]}
+COND_PER_TOKEN_OUTPUTS = {"factored": ["attr_gate"]}
 
 
 def output_names(cfg: ModelConfig) -> list[str]:
-    return OUTPUT_NAMES + (ATTR_OUTPUT_NAMES if cfg.attribution else [])
+    if not cfg.attribution:
+        return list(OUTPUT_NAMES)
+    return OUTPUT_NAMES + ATTR_OUTPUT_NAMES + COND_OUTPUT_NAMES.get(cfg.attr_conditioned, [])
 
 
 def per_token_outputs(cfg: ModelConfig) -> list[str]:
-    return PER_TOKEN_OUTPUTS + (ATTR_PER_TOKEN_OUTPUTS if cfg.attribution else [])
+    if not cfg.attribution:
+        return list(PER_TOKEN_OUTPUTS)
+    return (PER_TOKEN_OUTPUTS + ATTR_PER_TOKEN_OUTPUTS
+            + COND_PER_TOKEN_OUTPUTS.get(cfg.attr_conditioned, []))
 
 
 def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
@@ -69,10 +81,21 @@ def attribution_outputs(model: NoteAligner, x: torch.Tensor) -> tuple:
     identical thing for attribution with the identical bookkeeping. Emitting
     `logits_attr` instead would mean a graph that knows where the score half
     ends, and an (m, n) tensor per window on the wire.
+
+    A conditioned head adds whatever it alone owns — the gate projection or the
+    bias weight. The rest of the conditioning is a function of the match logits,
+    which the host has already computed and the graph must not recompute: inside
+    a window the p->s softmax runs over that window's score notes, not the whole
+    score, so a graph-side log P(insertion) would be the wrong quantity.
     """
     if not model.cfg.attribution:
         return ()
-    return (model.attr_s(x), model.attr_p(x), model.attr_none, model.attr_scale)
+    out = (model.attr_s(x), model.attr_p(x), model.attr_none, model.attr_scale)
+    if model.cfg.attr_conditioned == "bias":
+        return (*out, model.attr_cond_w)
+    if model.cfg.attr_conditioned == "factored":
+        return (*out, model.attr_gate(x))
+    return out
 
 
 class Enc(nn.Module):
@@ -118,25 +141,38 @@ class EncDustbin(nn.Module):
         return s, p, null_col, null_row, self.m.scale, *attribution_outputs(self.m, x)
 
 
+def conditioning_from_state(state: dict) -> str:
+    """Which `attr_conditioned` mode a state dict was trained with.
+
+    For checkpoints whose saved config predates the flag. The two modes own
+    disjoint parameters and neither is optional within its mode, so the weights
+    answer this outright."""
+    if any(k.startswith("attr_gate.") for k in state):
+        return "factored"
+    return "bias" if "attr_cond_w" in state else ""
+
+
 def load_model(ckpt_path: Path) -> tuple[NoteAligner, dict]:  # (model, checkpoint)
     """Rebuild the model from the checkpoint's own config — never from CLI
     defaults, or a mismatched d_model loads silently into a wrong-shaped graph."""
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     cfg_dict = ckpt["config"]
+    state = ckpt["model"]
     defaults = ModelConfig()
-    cfg = ModelConfig(
-        d_model=int(cfg_dict["d_model"]),
-        n_layers=int(cfg_dict["n_layers"]),
+    cfg = config_from_ckpt(
+        cfg_dict,
+        # Four fields `config_from_ckpt` does not carry because no training flag
+        # sets them; they still have to survive, or the graph is reshaped.
         n_heads=int(cfg_dict.get("n_heads", defaults.n_heads)),
         d_ff=int(cfg_dict.get("d_ff", defaults.d_ff)),
         dropout=float(cfg_dict.get("dropout", defaults.dropout)),
         max_rel=int(cfg_dict.get("max_rel", defaults.max_rel)),
-        matchability=bool(cfg_dict.get("matchability", defaults.matchability)),
-        # Built so the state dict still loads strictly; the exported graph does
-        # NOT include it (see Enc.forward — encoder + match/matchability heads
-        # only), so the ONNX signature is identical with or without the head.
+        # Both head flags fall back to the weights when the saved config predates
+        # them. `load_state_dict` below is strict, so a wrong guess is a loud
+        # error rather than a silently half-exported head.
         attribution=bool(cfg_dict.get(
-            "attribution", any(k.startswith("attr_") for k in ckpt["model"]))),
+            "attribution", any(k.startswith("attr_") for k in state))),
+        attr_conditioned=cfg_dict.get("attr_conditioned") or conditioning_from_state(state),
     )
     model = NoteAligner(cfg)
     model.load_state_dict(ckpt["model"])
@@ -204,6 +240,7 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
             "max_rel": cfg.max_rel,
             "matchability": cfg.matchability,
             "attribution": cfg.attribution,
+            "attr_conditioned": cfg.attr_conditioned,
         },
         "graph": {
             # Batch is pinned to 1 and padding is not modelled: the host runs
@@ -247,6 +284,17 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                     {"name": "attr_scale", "dtype": "float32", "shape": [],
                      "doc": "the attribution head's own logit scale, separate from `scale`"},
                 ] if cfg.attribution else []),
+                *([
+                    {"name": "attr_cond_w", "dtype": "float32", "shape": [],
+                     "doc": "the learned weight on log P(matched) in the none column; "
+                            "see head.attribution.conditioned"},
+                ] if cfg.attribution and cfg.attr_conditioned == "bias" else []),
+                *([
+                    {"name": "attr_gate", "dtype": "float32", "shape": [1, "T", 1],
+                     "doc": "attr_gate(encoder output) per token — the logit of "
+                            "P(this insertion elaborates a written note); "
+                            "see head.attribution.conditioned"},
+                ] if cfg.attribution and cfg.attr_conditioned == "factored" else []),
             ],
         },
         "featurize": {
@@ -308,19 +356,83 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                 "attr_scale": float(model.attr_scale.detach()),
                 "attr": "attr[j][i] = dot(attr_p[2 + n + j], attr_s[1 + i]) * attr_scale   # (m, n)",
                 "attr_none_col": "none[j] = dot(attr_p[2 + n + j], attr_none) * attr_scale  # (m,)",
-                "logits_attr": "concat([attr, none[:, None]], axis=1)             # (m, n + 1)",
+                "logits_attr": ("concat([attr, none[:, None]], axis=1)             # (m, n + 1)"
+                                if not cfg.attr_conditioned else
+                                "concat([attr, none[:, None]], axis=1)  — but NOT the final row: "
+                                "`conditioned` below replaces it"),
                 "read_as": ("argmax over each row: the written note this played note ornaments, "
                             "or the last column for 'not an ornament'. Softmax over the row gives "
-                            "a usable confidence."),
+                            "a usable confidence."
+                            + ("" if cfg.attr_conditioned != "factored" else
+                               " — except in 'factored' mode, where the row is already normalized; "
+                               "see conditioned.already_normalized")),
                 "accumulate": ("exactly as `sim` is accumulated, and with the same window "
                                "bookkeeping: attr += the window's block, then divide by the "
-                               "window count. The none column averages the same way."),
+                               "window count. The none column averages the same way."
+                               + ("" if not cfg.attr_conditioned else
+                                  " The conditioning is applied once, after that averaging; "
+                                  "see conditioned.when.")),
                 "supervision": ("trained only on espressivo-rendered rows, where ornament "
                                 "provenance is exhaustive. It has never been asked about a real "
                                 "trill with a known answer, because no corpus annotates one."),
                 "optional": ("the two per-token attribution outputs double the bytes a window "
                              "returns. A host that does not want them can name only the outputs "
                              "it needs when it runs the session."),
+                # Where the head stops answering "is this an ornament at all" for
+                # itself and takes the match head's answer instead. That half was
+                # only ever supervised on synthetic rows; the match head learned it
+                # from real insertion labels.
+                "conditioned": None if not cfg.attr_conditioned else {
+                    "mode": cfg.attr_conditioned,
+                    "log_floor": NoteAligner.LOG_FLOOR,
+                    "match_evidence": (
+                        "from the host's OWN p->s logits — the same (m, n+1) matrix it "
+                        "feeds the decode. The graph emits nothing extra for this, and "
+                        "must not: inside a window the p->s softmax runs over that "
+                        "window's score notes only.\n"
+                        "  lp             = log_softmax(logits_p2s, axis=1)   # (m, n + 1)\n"
+                        "  log_ins[j]     = max(lp[j][n], log_floor)\n"
+                        "  log_matched[j] = max(logsumexp(lp[j][0:n]), log_floor)\n"
+                        "The floor is NoteAligner.LOG_FLOOR — an unclamped certain match "
+                        "head puts an unbounded term into the row."),
+                    "when": (
+                        "ONCE, after window accumulation, on the full rows: accumulate "
+                        "attr / none" + (" / gate" if cfg.attr_conditioned == "factored" else "")
+                        + " exactly as above, then apply this to the averaged result. It is a "
+                        "nonlinear function of the whole p->s row, so averaging conditioned "
+                        "windows is not the same thing."),
+                    "detached": ("the match term carries no gradient in training either — the "
+                                 "attribution loss must stay unable to move the alignment. It "
+                                 "changes nothing for a host, but it is why the two heads can "
+                                 "be reproduced independently."),
+                    **({
+                        "attr_cond_w": float(model.attr_cond_w.detach()),
+                        "logits_attr": (
+                            "concat([attr, (none + attr_cond_w * log_matched)[:, None]], axis=1)"
+                            "   # (m, n + 1)\n"
+                            "i.e. the unconditioned row with one term added to its last column. "
+                            "Still unnormalized logits: softmax the row for a confidence."),
+                    } if cfg.attr_conditioned == "bias" else {
+                        "gate": "gate[j] = attr_gate[2 + n + j][0]   # (m,), read at the PERF tokens",
+                        "logits_attr": (
+                            "the whole row is rebuilt, and `none` (the attr_none dot product) is "
+                            "NOT part of it — attr_none stays in the output list only so the "
+                            "attribution block keeps its shape:\n"
+                            "  log_rank[j][i] = attr[j][i] - logsumexp(attr[j][0:n])   # (m, n)\n"
+                            "  row[j][i] = log_ins[j] + logsigmoid(gate[j]) + log_rank[j][i]\n"
+                            "  row[j][n] = logaddexp(log_ins[j] + logsigmoid(-gate[j]), "
+                            "log_matched[j])\n"
+                            "with logsigmoid(x) = -log1p(exp(-x)) and "
+                            "logaddexp(a, b) = max(a, b) + log1p(exp(-|a - b|)).\n"
+                            "Reads as P(anchor = i) = P(insertion) * P(attributable | insertion) "
+                            "* P(i | attributable); the none column collects both ways of not "
+                            "being an ornament — matched, or an unattributable insertion."),
+                        "already_normalized": (
+                            "the row IS a log-distribution over the n + 1 options: exp() it for a "
+                            "confidence, do NOT softmax it again. Softmaxing would discard exactly "
+                            "the match-head calibration this mode buys."),
+                    }),
+                },
             },
         },
         "host": {
@@ -373,6 +485,8 @@ def main() -> None:
     print(f"checkpoint: {ckpt_path}  epoch={ckpt.get('epoch', '?')} "
           f"d_model={model.cfg.d_model} n_layers={model.cfg.n_layers} "
           f"matchability={model.cfg.matchability} "
+          f"attribution={model.cfg.attribution}"
+          f"{f'/{model.cfg.attr_conditioned}' if model.cfg.attr_conditioned else ''} "
           f"params={sum(p.numel() for p in model.parameters()):,}")
 
     # A trace input with the real token layout: markers, split segments and

@@ -106,15 +106,12 @@ def main() -> None:
         import torch
 
         from mlign.infer import align_with_model
-        from mlign.model import ModelConfig, NoteAligner
+        from mlign.model import NoteAligner, config_from_ckpt
 
         device = "cpu"
         ckpt = torch.load(args.ckpt, map_location=device, weights_only=False)
         cfg = ckpt.get("config", {})
-        model = NoteAligner(ModelConfig(
-            d_model=cfg.get("d_model", 192), n_layers=cfg.get("n_layers", 4),
-            matchability=cfg.get("matchability", False),
-        )).to(device)
+        model = NoteAligner(config_from_ckpt(cfg, ckpt["model"])).to(device)
         model.load_state_dict(ckpt["model"])
         model.eval()
 

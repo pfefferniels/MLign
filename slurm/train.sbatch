@@ -95,8 +95,12 @@ SNAP_ARGS=()
 # rows (meta.gen = mlign-*); real-GT and self-supervised rows are ignored by it,
 # so enabling this is safe for any mix but only useful when the mix contains
 # ornament shards.
+#
+# ATTR_CONDITIONED lets the head read the match head's (detached) insertion
+# decision instead of re-deriving it: "bias" or "factored", empty = the v2 head.
 ATTR_ARGS=()
 [ "${ATTRIBUTION:-0}" != "0" ] && ATTR_ARGS=(--attribution --attr-weight "${ATTR_WEIGHT:-0.2}")
+[ -n "${ATTR_CONDITIONED:-}" ] && ATTR_ARGS+=(--attr-conditioned "$ATTR_CONDITIONED")
 
 # --- run ---------------------------------------------------------------------
 echo "=== $(date -Is) job $SLURM_JOB_ID on $(hostname) ==="
