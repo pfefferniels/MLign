@@ -341,6 +341,15 @@ class NoteAligner(nn.Module):
             none_col = torch.einsum("bmd,d->bm", a_p, self.attr_none)[:, :, None]
             logits_attr = torch.cat([attr, none_col], dim=2) * self.attr_scale
             logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
+            # The head's own two quantities, BEFORE any conditioning: the
+            # ranking over score notes and the "not an ornament" column. A
+            # decoder that sees a piece one window at a time has to average
+            # these and condition once at the end — the conditioned row carries
+            # a normaliser and a match verdict that belong to a single window,
+            # and averaging those leaves a per-cell offset no later row
+            # normalisation can remove. Same tensors the ONNX graph emits.
+            out["attr_rank_logit"] = logits_attr[..., :-1]
+            out["attr_none_logit"] = logits_attr[..., -1:]
             if self.cfg.attr_conditioned:
                 logits_attr, gate = self._condition_attr(logits_attr, logits_p2s, p_enc)
                 logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))

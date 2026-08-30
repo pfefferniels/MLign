@@ -455,13 +455,27 @@ def build_sidecar(model: NoteAligner, ckpt_path: Path, out_path: Path, opset: in
                                "already normalized; see conditioned.already_normalized")),
                 "accumulate": ("exactly as `sim` is accumulated, and with the same window "
                                "bookkeeping: attr += the window's block, then divide by the "
-                               "window count. The none column averages the same way."
+                               "window count. The none column averages the same way. Accumulate "
+                               "the RAW blocks: a per-window normalization, or a conditioning "
+                               "applied before averaging, leaves an offset that differs from cell "
+                               "to cell, and the single row normalization at the end removes only "
+                               "a row constant. `mlign.infer.accumulate` does it this way too, and "
+                               "the two are checked against each other."
                                + ("" if not cfg.attr_conditioned else
                                   " The conditioning is applied once, after that averaging; "
                                   "see conditioned.when.")),
+                "measured": ("every ornament-attribution figure this project has published was "
+                             "measured on SINGLE-WINDOW rows. The `realorn-*` corpora top out at "
+                             "927 tokens against a max_single_tokens of "
+                             f"{infer.MAX_SINGLE_TOKENS}, so no benchmark row exercises the "
+                             "windowed accumulation above. A full movement does. Treat the "
+                             "published group-exact numbers as evidence about the head, not as "
+                             "measurements of the windowed path."),
                 "supervision": ("trained only on espressivo-rendered rows, where ornament "
-                                "provenance is exhaustive. It has never been asked about a real "
-                                "trill with a known answer, because no corpus annotates one."),
+                                "provenance is exhaustive. Evaluated on real ones: ASAP and Batik "
+                                "put the ornament sign in the score note's own attribute list, "
+                                "and 1527 real figures are recovered from that "
+                                "(`scripts/corpus/real_orn_gt.py`)."),
                 "optional": ("the two per-token attribution outputs double the bytes a window "
                              "returns. A host that does not want them can name only the outputs "
                              "it needs when it runs the session."),

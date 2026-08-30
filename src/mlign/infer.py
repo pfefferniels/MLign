@@ -118,8 +118,10 @@ def accumulate(model, row: dict, device: str) -> Evidence:
     null_p_cnt = np.zeros(m, dtype=np.float32)
     rank = np.zeros((m, n), dtype=np.float32)
     rank_cnt = np.zeros((m, n), dtype=np.float32)
+    none_logit = np.zeros(m, dtype=np.float32)
     gate_logit = np.zeros(m, dtype=np.float32)
     attr_cnt = np.zeros(m, dtype=np.float32)
+    conditioned = False
 
     for s0, s1, p0, p1 in pairs:
         sub = {
@@ -146,33 +148,31 @@ def accumulate(model, row: dict, device: str) -> Evidence:
         null_p[p0:p1] += lp2s[:mp, ns]
         null_p_cnt[p0:p1] += 1.0
 
-        lattr = out.get("logits_attr")
-        if lattr is None:
+        lraw = out.get("attr_rank_logit")
+        if lraw is None:
             continue
-        full = lattr[0].float().cpu().numpy()[:mp, : ns + 1]
-        cols = full[:, :ns]
-        lgate = out.get("attr_gate_logit")
-        if lgate is not None:
-            block_gate = lgate[0].float().cpu().numpy()[:mp]
-        else:
-            # An unconditioned head carries no match-head factor to divide out,
-            # so its own none column already answers the question. Back to a
-            # logit so it averages on the same scale as a real gate.
-            p_orn = _logsumexp(cols, axis=1) - _logsumexp(full, axis=1)
-            block_gate = p_orn - np.log1p(-np.exp(np.minimum(p_orn, -1e-7)))
         # Counted per CELL, like `sim` above and unlike a per-note mask: a score
         # column a LATER window is the first to cover must not be left at its
         # initial value, or that anchor becomes unreachable for the whole note.
         #
-        # Accumulated RAW, also like `sim`. Normalising each window first looks
-        # tidier and is wrong once the counts differ per cell: the subtracted
-        # logsumexp is over the columns THAT window covered, so two cells seen
-        # by different windows get different offsets and stop being comparable.
-        # The row is normalised once at the end instead, which is the same thing
-        # when a single window covers the note and the right thing when several do.
-        rank[p0:p1, s0:s1] += cols
+        # And accumulated from the head's RAW ranking, not from the conditioned
+        # row. A conditioned score column is
+        # `log_ins + logsigmoid(gate) + log_rank`, all three of which belong to
+        # the window that produced them: `log_rank`'s normaliser runs over that
+        # window's score notes only, and the match verdict is that window's.
+        # Averaging those leaves an offset that differs from cell to cell, and
+        # the row normalisation below removes only a row constant — so a score
+        # note's rank would depend on which window happened to cover it. The
+        # conditioning is a nonlinear function of the whole row and is applied
+        # once, at the end, which is also what the ONNX sidecar specifies.
+        rank[p0:p1, s0:s1] += lraw[0].float().cpu().numpy()[:mp, :ns]
         rank_cnt[p0:p1, s0:s1] += 1.0
-        gate_logit[p0:p1] += block_gate
+        lgate = out.get("attr_gate_logit")
+        if lgate is not None:
+            conditioned = True
+            gate_logit[p0:p1] += lgate[0].float().cpu().numpy()[:mp]
+        else:
+            none_logit[p0:p1] += out["attr_none_logit"][0].float().cpu().numpy()[:mp, 0]
         attr_cnt[p0:p1] += 1.0
 
     cnt[cnt == 0] = 1.0
@@ -185,13 +185,24 @@ def accumulate(model, row: dict, device: str) -> Evidence:
 
     orn = None
     if attr_cnt.any():
-        rank = np.where(rank_cnt > 0, rank / np.maximum(rank_cnt, 1.0), -1e9)
-        rank = rank - _logsumexp(rank, axis=1)[:, None]
+        # a cell no window scored cannot be an anchor
+        mean_rank = np.where(rank_cnt > 0, rank / np.maximum(rank_cnt, 1.0), -1e9)
+        if conditioned:
+            mean_gate = gate_logit / np.maximum(attr_cnt, 1.0)
+        else:
+            # An unconditioned head carries no match-head factor to divide out,
+            # so its own none column already answers the question — asked once,
+            # against the whole score, rather than against each window's slice.
+            # Back to a logit so it lands on the same scale as a real gate.
+            mean_none = none_logit / np.maximum(attr_cnt, 1.0)
+            both = np.concatenate([mean_rank, mean_none[:, None]], axis=1)
+            p_orn = _logsumexp(mean_rank, axis=1) - _logsumexp(both, axis=1)
+            mean_gate = p_orn - np.log1p(-np.exp(np.minimum(p_orn, -1e-7)))
+        log_rank = mean_rank - _logsumexp(mean_rank, axis=1)[:, None]
         # a note no window scored cannot be attributed to anything
-        rank[attr_cnt == 0] = -1e9
-        mean_gate = gate_logit / np.maximum(attr_cnt, 1.0)
+        log_rank[attr_cnt == 0] = -1e9
         log_gate = np.where(attr_cnt == 0, -1e9, -np.logaddexp(0.0, -mean_gate))
-        orn = Ornaments(rank=rank, log_gate=log_gate)
+        orn = Ornaments(rank=log_rank, log_gate=log_gate)
     return Evidence(sim=sim, null_s=null_s, null_p=null_p, ornaments=orn)
 
 

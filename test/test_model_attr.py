@@ -245,6 +245,7 @@ def test_a_later_window_can_still_supply_the_anchor():
             return {"logits_s2p": torch.zeros(1, n, m + 1),
                     "logits_p2s": torch.zeros(1, m, n + 1),
                     "logits_attr": attr,
+                    "attr_rank_logit": attr[:, :, :n],
                     "attr_gate_logit": torch.full((1, m), 3.0)}
 
     fake = TwoWindow()
@@ -264,3 +265,75 @@ def test_a_later_window_can_still_supply_the_anchor():
     gate, share = 1 / (1 + np.exp(-3.0)), np.exp(ev.ornaments.rank[0][anchor])
     assert prob == pytest.approx(gate * share, rel=1e-6)
     assert 0.0 < prob <= 1.0
+
+
+def test_rank_accumulates_the_raw_head_not_the_conditioned_columns():
+    """Windowed accumulation must average the RAW ranking and condition once.
+
+    A conditioned score column is `log_ins + logsigmoid(gate) + log_rank`, and
+    both `log_rank`'s normaliser and the gate belong to the window that produced
+    them. Averaging those and normalising the row once leaves an offset that
+    differs from CELL to cell — a row normalisation removes only a row constant
+    — so a score note's rank comes to depend on which window happened to cover
+    it. `scripts/export_onnx.py`'s sidecar tells a host to accumulate the raw
+    ingredients and condition at the end; this pins the Python to the same
+    contract.
+
+    Two windows overlapping in score notes, one confident about its own window
+    and one not. The globally best anchor lives in the unconfident window, so
+    conditioning first hands the answer to the wrong one.
+    """
+    import numpy as np
+    from mlign import infer
+
+    row = {"score": [[i * 720.0, 720.0, 60 + (i % 12), 0] for i in range(8)],
+           "perf": [[i * 500.0, 400.0, 60 + (i % 12), 64] for i in range(6)],
+           "align": [], "subs": [], "ins": [], "del": []}
+
+    # score 0 scores 5.0 and is reachable only from window A; score 7 scores
+    # 6.0 and only from window B. Globally 7 wins on the raw head.
+    SPIKES = [(0, 5.0, 8.0), (5, 6.0, -8.0)]   # (local score index, logit, gate)
+
+    class SkewedWindows:
+        """Two windows whose gates differ by 16 nats."""
+        def __init__(self): self.calls = 0
+        def __call__(self, batch):
+            n, m = int(batch["n_score"][0]), int(batch["n_perf"][0])
+            local, value, gate = SPIKES[self.calls]
+            self.calls += 1
+            raw = torch.zeros(1, m, n)
+            raw[0, :, local] = value
+            # exactly NoteAligner._condition_attr's `factored` branch, with the
+            # match head certain this played note is an insertion
+            lsg = torch.nn.functional.logsigmoid
+            g = torch.tensor(gate)
+            log_rank = raw - raw.logsumexp(-1, keepdim=True)
+            cols = lsg(g) + log_rank
+            none = torch.logaddexp(lsg(-g), torch.tensor(-12.0)).expand(1, m, 1)
+            return {"logits_s2p": torch.zeros(1, n, m + 1),
+                    "logits_p2s": torch.zeros(1, m, n + 1),
+                    "logits_attr": torch.cat([cols, none], dim=-1),
+                    "attr_rank_logit": raw,
+                    "attr_gate_logit": torch.full((1, m), gate)}
+
+    windows = [(0, 6, 0, 6), (2, 8, 0, 6)]     # score ranges overlap on 2..5
+    orig, orig_max = infer.coarse_windows, infer.MAX_SINGLE_TOKENS
+    infer.coarse_windows = lambda *a, **k: windows
+    infer.MAX_SINGLE_TOKENS = 0
+    try:
+        ev = infer.accumulate(SkewedWindows(), row, "cpu")
+    finally:
+        infer.coarse_windows, infer.MAX_SINGLE_TOKENS = orig, orig_max
+
+    anchor, _ = ev.ornaments.anchor_of(0)
+    assert anchor == 7, (
+        f"got {anchor}: the ranking was normalised inside each window, so the "
+        "quieter window's better anchor lost to the louder window's offset")
+
+    # And pin the values, not only the argmax: the row is the normalised mean of
+    # the raw per-cell logits, which is what the sidecar specifies.
+    raw_mean = np.zeros((6, 8))
+    raw_mean[:, 0] = 5.0      # window A only
+    raw_mean[:, 7] = 6.0      # window B only
+    expected = raw_mean - np.log(np.exp(raw_mean).sum(axis=1, keepdims=True))
+    assert np.allclose(ev.ornaments.rank, expected, atol=1e-5)
