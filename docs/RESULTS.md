@@ -53,10 +53,12 @@ performed unfolding); identical inputs for both systems.
 
 | system | match F | ins F | del F | n |
 |---|---|---|---|---|
-| MLign v3 | 0.9931 ± 0.0053 | 0.8492 | 0.6340 | 36 |
+| MLign (`runs/v1c/best.pt`) | 0.9931 ± 0.0053 | 0.8492 | 0.6340 | 36 |
 | DualDTW | 0.9920 ± 0.0087 | 0.8699 | 0.4692 | 36 |
 
 Paired: MLign 18W / 0T / 18L (p = 0.57) — parity-or-better. Published DualDTW on Batik: 99.4 ± 0.7.
+
+**This is an early checkpoint, not the released model.** The run dates from 2026-08-10, before `models/mlign-v1.pt` existed, and has not been repeated for any release since. It is reported because Batik is where the nASAP margin does not carry over, which is worth knowing whichever checkpoint shows it — but nothing here is a v4 number.
 
 ## 3. Robustness to mismatch (Vienna 4x22, contiguous 20% mismatch)
 

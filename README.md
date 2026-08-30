@@ -10,13 +10,14 @@ On the held-out nASAP test split (84 performances the model never saw in any
 form) MLign v4 reaches **0.9898 ± 0.0158** match-F against **0.9852** for
 DualDTW (parangonar 3.1.0), the strongest published system we could run; paired
 per performance, 68 wins / 4 ties / 12 losses. The margin is small and does not
-carry over automatically — on Batik-plays-Mozart the two are at parity. On
-alignment v4 ties both released predecessors, v3 (30W / 22T / 32L, p = 0.65) and
-v2 (32W / 17T / 35L, p = 0.69). What it adds is a better ornament-attribution
-head: 0.4784 of the real Batik ornament figures come out whole against v3's
-0.3297, 145 figures gained against 35 lost. Numbers, protocols and negative
-results:
-[`docs/RESULTS.md`](docs/RESULTS.md), [`docs/DESIGN.md`](docs/DESIGN.md).
+carry over automatically: on Batik-plays-Mozart the two are at parity, though
+that run is from an early checkpoint (`runs/v1c`, August 10) and has not been
+repeated for any release since. On alignment v4 ties both released predecessors,
+v3 (30W / 22T / 32L, p = 0.65) and v2 (32W / 17T / 35L, p = 0.69). What it adds
+is a better ornament-attribution head: 0.4784 of the real Batik ornament figures
+come out whole against v3's 0.3297, 145 figures gained against 35 lost. Numbers,
+protocols and negative results: [`docs/RESULTS.md`](docs/RESULTS.md),
+[`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## What this builds on
 

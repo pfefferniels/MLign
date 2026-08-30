@@ -145,11 +145,19 @@ out.append("\n## 2. Batik-plays-Mozart (36 movements)\n")
 out.append("Score and performance tables both derived from the match files (GT id space; the\n"
            "performed unfolding); identical inputs for both systems.\n")
 out.append("| system | match F | ins F | del F | n |\n|---|---|---|---|---|")
-if mb: out.append(row("MLign v3", mb))
+# Named from the result's own `aligner` field rather than from a typed version.
+# It is the only way this row cannot drift away from the checkpoint that
+# actually produced it, and the drift is not hypothetical.
+if mb: out.append(row(f"MLign (`{mb['aggregate']['aligner'].split(':', 1)[-1]}`)", mb))
 if db: out.append(row("DualDTW", db))
 if mb and db:
     w, t, l, p = paired(mb, db, key=("piece",))
     out.append(f"\nPaired: MLign {w}W / {t}T / {l}L (p = {p:.2f}) — parity-or-better. Published DualDTW on Batik: 99.4 ± 0.7.")
+    out.append(f"\n**This is an early checkpoint, not the released model.** The run dates from "
+               f"2026-08-10, before `models/mlign-v1.pt` existed, and has not been repeated for any "
+               f"release since. It is reported because Batik is where the nASAP margin does not "
+               f"carry over, which is worth knowing whichever checkpoint shows it — but nothing "
+               f"here is a v4 number.")
 
 # ---- 3. Bar B
 mm_bl = load("baseline-4x22mm.json"); mm_d = load("dualdtw-4x22mm.json")
