@@ -1,0 +1,28 @@
+{
+  "what": "seed replicates of one configuration: orn4 corpus, attr_conditioned=factored",
+  "why": "Until these, no two runs in this project differed by seed alone, so run-to-run noise and design effect were never separable. The paired bootstrap elsewhere is a WITHIN-run interval over figures and does not capture this.",
+  "corpus": "realorn-batik, 740 clean figures",
+  "runs": [
+    {
+      "run": "v15fact",
+      "seed": 0,
+      "group_exact": 0.4784,
+      "note_acc": 0.8622
+    },
+    {
+      "run": "v16seed",
+      "seed": 7,
+      "group_exact": 0.4162,
+      "note_acc": 0.8148
+    },
+    {
+      "run": "v16seed2",
+      "seed": 13,
+      "group_exact": 0.3892,
+      "note_acc": 0.822
+    }
+  ],
+  "mean": 0.4279,
+  "sd": 0.0457,
+  "shipped": "v15fact (seed 0) is models/mlign-v4.pt and is the best of the three"
+}
