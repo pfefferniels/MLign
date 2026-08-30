@@ -163,7 +163,14 @@ def accumulate(model, row: dict, device: str) -> Evidence:
         # Counted per CELL, like `sim` above and unlike a per-note mask: a score
         # column a LATER window is the first to cover must not be left at its
         # initial value, or that anchor becomes unreachable for the whole note.
-        rank[p0:p1, s0:s1] += cols - _logsumexp(cols, axis=1)[:, None]
+        #
+        # Accumulated RAW, also like `sim`. Normalising each window first looks
+        # tidier and is wrong once the counts differ per cell: the subtracted
+        # logsumexp is over the columns THAT window covered, so two cells seen
+        # by different windows get different offsets and stop being comparable.
+        # The row is normalised once at the end instead, which is the same thing
+        # when a single window covers the note and the right thing when several do.
+        rank[p0:p1, s0:s1] += cols
         rank_cnt[p0:p1, s0:s1] += 1.0
         gate_logit[p0:p1] += block_gate
         attr_cnt[p0:p1] += 1.0
@@ -179,7 +186,6 @@ def accumulate(model, row: dict, device: str) -> Evidence:
     orn = None
     if attr_cnt.any():
         rank = np.where(rank_cnt > 0, rank / np.maximum(rank_cnt, 1.0), -1e9)
-        # averaging rows with unequal cell counts leaves them un-normalized
         rank = rank - _logsumexp(rank, axis=1)[:, None]
         # a note no window scored cannot be attributed to anything
         rank[attr_cnt == 0] = -1e9
