@@ -151,3 +151,49 @@ def test_a_checkpoint_describes_itself(mode: str, attribution: bool) -> None:
     assert rebuilt.attr_conditioned == mode
     assert rebuilt.matchability is True
     NoteAligner(rebuilt).load_state_dict(state)  # strict: raises if a head is missing
+
+
+@pytest.mark.parametrize("mode", ["factored", "residual", "evidenced", "calibrated"])
+def test_exported_gate_is_the_gate_the_head_used(mode):
+    """`log_attr_gate` must be the very tensor the conditioning applied.
+
+    The decode-side attribution thresholds on it, so a drift here silently
+    changes what counts as an ornament. Reconstructing it instead from
+    `logsumexp(score columns) - log_ins` is exact only under `factored`;
+    `residual` and `evidenced` feed the gate an override-augmented `log_ins`
+    and that identity over-reads them, which is why the tensor is exported.
+    """
+    torch.manual_seed(0)
+    cfg = ModelConfig(d_model=32, n_layers=1, n_heads=2, attribution=True,
+                      attr_conditioned=mode)
+    model = NoteAligner(cfg).eval()
+    batch = collate([featurize(a_row())], "cpu")
+    with torch.no_grad():
+        out = model(batch)
+        n, m = int(batch["n_score"][0]), int(batch["n_perf"][0])
+        enc = model.encode(batch["pitch"], batch["cont"], batch["segment"],
+                           batch["position"], batch["pad"])
+        p_enc = enc[:, 2 + n: 2 + n + m]
+        expected = torch.nn.functional.logsigmoid(model.attr_gate(p_enc))[0, :, 0]
+        if mode == "calibrated":
+            rank = out["logits_attr"][:, :m, :n]
+            from mlign.model import _rank_margin
+            expected = torch.nn.functional.logsigmoid(
+                model.attr_gate(p_enc)
+                + model.attr_gate_margin
+                * _rank_margin(rank - torch.logsumexp(rank, dim=-1, keepdim=True))
+            )[0, :, 0]
+
+    assert "log_attr_gate" in out
+    torch.testing.assert_close(out["log_attr_gate"][0, :m], expected, rtol=1e-5, atol=1e-6)
+    assert bool((out["log_attr_gate"] <= 0).all()), "a log-probability must not exceed 0"
+
+
+def test_unconditioned_head_exports_no_gate():
+    """Without conditioning there is no P(attributable | insertion) to export."""
+    torch.manual_seed(0)
+    model = NoteAligner(ModelConfig(d_model=32, n_layers=1, n_heads=2,
+                                    attribution=True, attr_conditioned="")).eval()
+    with torch.no_grad():
+        out = model(collate([featurize(a_row())], "cpu"))
+    assert "log_attr_gate" not in out

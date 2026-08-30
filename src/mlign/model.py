@@ -345,6 +345,9 @@ class NoteAligner(nn.Module):
                 logits_attr = self._condition_attr(logits_attr, logits_p2s, p_enc)
                 logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
             out["logits_attr"] = logits_attr
+            gate = self._attr_gate(logits_attr, p_enc)
+            if gate is not None:
+                out["log_attr_gate"] = gate
 
         return out
 
@@ -358,6 +361,27 @@ class NoteAligner(nn.Module):
         log_ins = lp[..., -1:].clamp(min=self.LOG_FLOOR)
         log_matched = torch.logsumexp(lp[..., :-1], dim=-1, keepdim=True).clamp(min=self.LOG_FLOOR)
         return log_ins, log_matched
+
+    def _attr_gate(self, logits_attr, p_enc) -> torch.Tensor | None:
+        """log P(this played note elaborates a written note | it is an insertion).
+
+        Exported because a decoder needs it and cannot reliably rebuild it.
+        `logsumexp(score columns) - log_ins` recovers it exactly under
+        `factored`, but `residual` and `evidenced` feed the gate an
+        override-augmented `log_ins`, so that identity over-reads them — on
+        v12both by +0.32 nats on average and up to +3.3 on exactly the vetoed
+        notes, flipping 13.8 % of threshold decisions. Emitting it removes the
+        guesswork, costs no parameter, and needs no retraining: every trained
+        checkpoint already computes this tensor.
+        """
+        if self.cfg.attr_conditioned in ("factored", "residual", "evidenced", "calibrated"):
+            gate = self.attr_gate(p_enc)
+            if self.cfg.attr_conditioned == "calibrated":
+                rank = logits_attr[..., :-1]
+                gate = gate + self.attr_gate_margin * _rank_margin(
+                    rank - torch.logsumexp(rank, dim=-1, keepdim=True))
+            return F.logsigmoid(gate).squeeze(-1)
+        return None
 
     def _condition_attr(self, logits_attr, logits_p2s, p_enc) -> torch.Tensor:
         log_ins, log_matched = self._match_evidence(logits_p2s)

@@ -138,18 +138,21 @@ def accumulate(model, row: dict, device: str) -> Evidence:
         lattr = out.get("logits_attr")
         if lattr is None:
             continue
-        cols = lattr[0].float().cpu().numpy()[:mp, :ns]
-        # log_ins is the match head's own P(insertion), the same quantity the
-        # head was conditioned on; dividing it out leaves logsigmoid(gate).
-        lp = lp2s[:mp, : ns + 1]
-        log_ins = lp[:, ns] - _logsumexp(lp, axis=1)
-        block_gate = _logsumexp(cols, axis=1) - log_ins
+        full = lattr[0].float().cpu().numpy()[:mp, : ns + 1]
+        cols = full[:, :ns]
+        lgate = out.get("log_attr_gate")
+        if lgate is not None:
+            block_gate = lgate[0].float().cpu().numpy()[:mp]
+        else:
+            # An unconditioned head carries no match-head factor to divide out,
+            # so its own none column already answers the question.
+            block_gate = _logsumexp(cols, axis=1) - _logsumexp(full, axis=1)
         region = rank[p0:p1, s0:s1]
         first = attr_cnt[p0:p1] == 0
         region[first] = 0.0
         region += cols - _logsumexp(cols, axis=1)[:, None]
         rank[p0:p1, s0:s1] = region
-        log_gate[p0:p1] += np.minimum(block_gate, 0.0)
+        log_gate[p0:p1] += block_gate
         attr_cnt[p0:p1] += 1.0
 
     cnt[cnt == 0] = 1.0
