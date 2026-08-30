@@ -186,6 +186,16 @@ def perf_notes_from_match(path: str | Path) -> list[dict]:
                 "velocity": max(1, min(127, int(vel))),
             }
         )
+    if not records:
+        # v5.0 match files spell the note line differently, so the regexes above
+        # match nothing and the caller gets a silent empty performance — 256 of
+        # ASAP's files, 48 of the 84 in the robust test split. Nothing on the
+        # eval path reads this today, which is exactly why it would go unnoticed.
+        raise ValueError(
+            f"{path}: no note lines parsed. matchFileVersion is probably not "
+            "1.0.0 — this parser only reads that spelling, and returning an "
+            "empty performance silently is how it would be missed."
+        )
     return records
 
 
