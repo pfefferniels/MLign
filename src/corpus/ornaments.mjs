@@ -35,6 +35,14 @@ export const DEFAULTS = {
   // ~120 bpm with 4 pairs/quarter runs at 16 notes/s, the fast end of real
   // playing; the sampled range spans the plausible band rather than a point.
   pairsPerQuarter: [1.6, 4.2],
+  // Whether `breadth` also multiplies that rate. It did, unconditionally, and
+  // the range above is calibrated for breadth 1: measured against real Batik
+  // trills (median step 81 ms, 12.3 notes/s), breadth 1 gives 78 ms and 12.7,
+  // breadth 2 gives 52 ms and 19.2, breadth 3 gives 39 ms and 25.6 — past what
+  // a hand does. Breadth is meant to widen a figure toward early-recording
+  // style, and speeding it up is not the same thing. Left on by default so the
+  // shards already built still reproduce.
+  rateFollowsBreadth: true,
   maxPairs: 14,
   // < 1 accelerates. Real trills rarely decelerate, so the range sits below 1
   // with only a little room above.
@@ -102,7 +110,7 @@ function neighbour(rng) {
  */
 function trill(rng, cfg, { id, durQuarters }) {
   const up = neighbour(rng);
-  const perQuarter = lerp(rng, cfg.pairsPerQuarter) * cfg.breadth;
+  const perQuarter = lerp(rng, cfg.pairsPerQuarter) * (cfg.rateFollowsBreadth ? cfg.breadth : 1);
   const pairs = Math.max(2, Math.min(cfg.maxPairs, Math.round(durQuarters * perQuarter)));
   const upperFirst = rng.nextDouble() < cfg.upperStartProb;
 

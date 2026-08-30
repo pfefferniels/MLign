@@ -62,7 +62,7 @@ function parseArgs(argv) {
   const opt = {
     robustness: 'medium', jitter: 12, ornaments: 0, addRate: null, ornJitter: null, minDur: null,
     exaggerate: false, profile: 'modern', breadth: 1, imprecision: '', signShare: null,
-    restrike: 0, turnLead: 0, upperStart: null, addOrnWeight: null,
+    restrike: 0, turnLead: 0, upperStart: null, addOrnWeight: null, trillRate: null, ornStep: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -81,6 +81,11 @@ function parseArgs(argv) {
     else if (a === '--sign-share') opt.signShare = Number(argv[++i]);
     else if (a === '--restrike') opt.restrike = Number(argv[++i]);
     else if (a === '--turn-lead') opt.turnLead = Number(argv[++i]);
+    // 'real' decouples the trill rate from --breadth, which otherwise makes
+    // trills 1.5x faster than any real recording at breadth 2.
+    else if (a === '--trill-rate') opt.trillRate = argv[++i];
+    // ms between successive notes of a written-out alternation, 'lo,hi'.
+    else if (a === '--orn-step') opt.ornStep = argv[++i].split(',').map(Number);
     else if (a === '--upper-start') opt.upperStart = Number(argv[++i]);
     else if (a === '--add-orn-weight') opt.addOrnWeight = Number(argv[++i]);
     else pos.push(a);
@@ -91,6 +96,7 @@ function parseArgs(argv) {
         '       [--ornaments rate] [--exaggerate [modern|early]] [--breadth f]\n' +
         '       [--imprecision subtle|natural|early] [--sign-share 0..1]\n' +
         '       [--restrike 0..1] [--turn-lead 0..1] [--upper-start 0..1]\n' +
+        '       [--trill-rate real]\n' +
         '       [--add-orn-weight 0..1]',
     );
   }
@@ -520,6 +526,7 @@ async function main() {
   // and `generate_real.mjs`, which shares both modules, is untouched.
   const figureCfg = {
     turnLeadProb: args.turnLead,
+    ...(args.trillRate === 'real' ? { rateFollowsBreadth: false } : {}),
     ...(args.upperStart === null ? {} : { upperStartProb: args.upperStart }),
   };
   // The robustness layer's consonant additions land in the SAME attribution
@@ -546,6 +553,7 @@ async function main() {
       // the principal, and opening with a re-strike of it. The espressivo path
       // cannot express that opening, so it has to come from here.
       ornamentLand: args.restrike > 0,
+      ...(args.ornStep ? { ornamentStepMs: args.ornStep } : {}),
       ornamentRestrikeProb: args.restrike,
       ...(args.addOrnWeight === null ? {} : {
         ornamentWeight: args.addOrnWeight,
@@ -580,7 +588,9 @@ async function main() {
     const rng = new JavaRandom(args.seed * 1000003n + BigInt(i));
     const piece = samplePieceV4(rng, i, WANT, OPT);
     const ornDefs =
-      args.ornaments > 0 ? sampleOrnaments(piece, rng, args.ornaments, args.breadth, ornKinds) : null;
+      args.ornaments > 0
+        ? sampleOrnaments(piece, rng, args.ornaments, args.breadth, ornKinds, figureCfg)
+        : null;
     const exagFactors = args.exaggerate ? sampleExagFactors(rng, args.profile) : null;
     const imprecision = sampleImprecision(rng, args.imprecision);
     let row;
