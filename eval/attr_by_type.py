@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts" / "corpus"))
 
 from mlign.dataset import collate, featurize, parse_row  # noqa: E402
+from mlign.infer import accumulate, decode  # noqa: E402
 from real_orn_gt import parse_match  # noqa: E402
 from run_attribution import load_model  # noqa: E402
 
@@ -119,6 +120,44 @@ def figures(model, rows: list, device: str, batch: int):
                 )
 
 
+def decoded_figures(model, rows: list, device: str):
+    """The same records, but attributed as the PIPELINE does it.
+
+    `figures` reads the head's argmax, which the match head dominates. This
+    reads what a user gets: the decode names the insertions, and the head is
+    asked only about those.
+    """
+    for row in rows:
+        gt = {int(p): int(a) for p, a, *_ in row.get("orn", ()) if int(a) >= 0}
+        if not gt:
+            continue
+        ev = accumulate(model, row, device)
+        tri = decode(row, ev.sim, ev.null_s, ev.null_p, ornaments=ev.ornaments)
+        pred = {t["perf_idx"]: (t.get("ornament") or {}).get("anchor_score_idx", -1)
+                for t in tri if t["label"] == "insertion"}
+        ids, score, perf = row["scoreIds"], row["score"], row["perf"]
+        sign_map = signs_of(row["meta"]["source"])
+        by_anchor: dict[int, list[int]] = collections.defaultdict(list)
+        for pi, anchor in gt.items():
+            by_anchor[anchor].append(pi)
+        for anchor, idxs in by_anchor.items():
+            if anchor >= len(ids):
+                continue
+            aid = ids[anchor]
+            a_pitch = score[anchor][2]
+            hit = [pred.get(j, -1) == anchor for j in idxs]
+            veto = [j not in pred for j in idxs]   # the decode called it a match
+            uni = [perf[j][2] == a_pitch for j in idxs]
+            yield Figure(
+                piece=row["meta"].get("piece", ""),
+                anchor=f"{row['meta']['source']}#{aid}",
+                sign=canonical_sign(sign_map.get(aid, frozenset())),
+                size=len(idxs), hits=sum(hit), vetoed=sum(veto), unison=sum(uni),
+                unison_hits=sum(h for h, u in zip(hit, uni) if u),
+                veto_hits=sum(h for h, v in zip(hit, veto) if v),
+            )
+
+
 def size_bucket(size: int) -> str:
     return str(size) if size <= 8 else "9+"
 
@@ -165,6 +204,8 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--decoded", action="store_true",
+                    help="attribute as the pipeline does, not by the head's argmax")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -176,7 +217,9 @@ def main() -> None:
     if not rows:
         raise SystemExit(f"{args.corpus} carries no realorn-* rows to score.")
 
-    figs = list(figures(load_model(args.ckpt, args.device), rows, args.device, args.batch))
+    model = load_model(args.ckpt, args.device)
+    figs = list(decoded_figures(model, [parse_row(r) for r in rows], args.device)
+                if args.decoded else figures(model, rows, args.device, args.batch))
     clean = [f for f in figs if f.vetoed == 0]
     by_size = crosstab(figs, lambda f: size_bucket(f.size))
     by_sign = crosstab(figs, lambda f: f.sign)
