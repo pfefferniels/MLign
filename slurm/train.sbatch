@@ -101,6 +101,9 @@ SNAP_ARGS=()
 ATTR_ARGS=()
 [ "${ATTRIBUTION:-0}" != "0" ] && ATTR_ARGS=(--attribution --attr-weight "${ATTR_WEIGHT:-0.2}")
 [ -n "${ATTR_CONDITIONED:-}" ] && ATTR_ARGS+=(--attr-conditioned "$ATTR_CONDITIONED")
+# SEED shifts weight init and batch order together; 0 is every run so far.
+SEED_ARGS=()
+[ -n "${SEED:-}" ] && SEED_ARGS=(--seed "$SEED")
 
 # --- run ---------------------------------------------------------------------
 echo "=== $(date -Is) job $SLURM_JOB_ID on $(hostname) ==="
@@ -119,6 +122,7 @@ srun "$PY" -W ignore scripts/train.py \
     "${VAL_ARGS[@]}" \
     "${SNAP_ARGS[@]}" \
     "${ATTR_ARGS[@]}" \
+    "${SEED_ARGS[@]}" \
     --run "$RUN"
 
 echo "=== $(date -Is) done ==="

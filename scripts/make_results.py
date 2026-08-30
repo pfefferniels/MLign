@@ -63,12 +63,17 @@ m3 = load("mlign-v3-robust-test.json"); m5 = load("v5real-e005-robust-test.json"
 # above is a different thing entirely — the day-2 training run that happened to
 # be called v3 — and the two must not be conflated in a table.
 v3f = load("v9fact-robust-test.json"); v9o = load("v9off-robust-test.json")
+# The v4 candidate, still under promotion: `runs/v15fact/best.pt`, not in
+# `models/`. Promoting it means copying the checkpoint there and rewriting this
+# row's label — no other line in this file names it.
+v4 = load("v15fact-robust-test.json")
 out.append("## 1. Headline: nASAP robust test split (untouched holdout)\n")
 out.append("84 performances / 27 pieces: nASAP alignments flagged robust ∩ MAESTRO-v2 test pieces\n"
            "(`eval/split.py`). No training, self-supervision, selection or dev data touches these\n"
            "pieces (all self-sup/real-GT corpora exclude the folders).\n")
 out.append("| system | match F | ins F | del F | n |\n|---|---|---|---|---|")
 if v3f: out.append(row("**MLign v3** (`models/mlign-v3.pt` = v9fact, conditioned attribution head)", v3f, bold=True))
+if v4: out.append(row("MLign v4 candidate (`runs/v15fact` epoch 19 — orn4 corpus, factored attribution)", v4))
 if v9o: out.append(row("MLign v9off (v3's corpus, unconditioned head — the alignment high-water mark)", v9o))
 if v2: out.append(row("MLign v2 (`models/mlign-v2.pt` = v8early epoch 30)", v2))
 if v7: out.append(row("MLign v7attr epoch 22 (attribution, pre-early-corpus)", v7))
@@ -88,6 +93,18 @@ if v3f and v2:
                f"reported as one.** v3 is not a better aligner than v2; it is the same aligner with "
                f"an ornament head that works on real recordings (§6). The alignment number is here "
                f"to show that the head was not paid for out of it.")
+if v4 and v3f and v2:
+    w, t, l, p = paired(v4, v3f)
+    w2, t2, l2, p2 = paired(v4, v2)
+    out.append(f"\nMLign v4 candidate vs MLign v3: {w} wins / {t} ties / {l} losses, p = {p:.2f}; vs v2 "
+               f"{w2}W / {t2}T / {l2}L, p = {p2:.2f} — **a tie against both**, which is what a "
+               f"checkpoint promoted for attribution has to show. Where it does move is del-F: "
+               f"{v4['aggregate']['deletion_f']:.4f}, against v3's "
+               f"{v3f['aggregate']['deletion_f']:.4f} and v2's "
+               f"{v2['aggregate']['deletion_f']:.4f} — so v2 keeps the deletion record. "
+               f"The alignment cost reported in the ornament notes is measured against v12both "
+               f"(del-F 0.9081), a checkpoint that never shipped; against the shipped models it "
+               f"does not appear.")
 if v2 and m21:
     w, t, l, p = paired(v2, m21)
     out.append(f"MLign v2 vs MLign v1: **{w} wins / {t} ties / {l} losses**, "
@@ -161,7 +178,8 @@ out.append("\nIn-run measurement (v5real log): dedicated real val loss bottoms a
 # four never shipped: v9off/v9bias/v9fact are one corpus trained with three
 # settings of the same flag, and v9fact is what `models/mlign-v3.pt` is.
 ATTR_MODELS = [("v2", "v2"), ("v9off", "v9off"),
-               ("v9bias", "v9bias"), ("v9fact", "**v3** (=v9fact)")]
+               ("v9bias", "v9bias"), ("v9fact", "**v3** (=v9fact)"),
+               ("v15fact", "v4 cand. (=v15fact)")]
 # The three that differ in ONE flag on ONE corpus, so a ranking among them is
 # about the flag and nothing else. v2 is a different corpus and belongs in the
 # table but not in that comparison.
@@ -246,8 +264,97 @@ if any(attr.values()):
                        "note, in any cell of this table — so the clamp is not quietly setting a\n"
                        "downstream confidence threshold; the model is.\n")
 
-# ---- 7. dev-long table
-out.append("\n### dev-long tier (train-split, never test)\n")
+# ---- 6b. attribution through the decode
+#
+# The table above reads `logits_attr.argmax(-1)`, which the conditioned none
+# column dominates: a played note the match head believes it matched is silenced
+# whatever attribution thinks, so vetoed accuracy is .0000 by construction. The
+# deployed pipeline never asks that question — the decode has already ruled the
+# note an insertion — and reads the two surviving factors instead, gate x rank.
+# Same checkpoints, same figures, a different and larger number, and the one a
+# user gets. Neither replaces the other: the head number says what the head
+# learned, this one says what ships.
+DECODED = [("v9fact", "v3 (=v9fact)"), ("v12both", "v12both (orn2, evidenced)"),
+           ("v15evid", "v15evid (orn4, evidenced)"),
+           ("v15fact", "**v4 cand.** (=v15fact, orn4, factored)")]
+# realorn-batik has no overlap with anything MLign trained or selected on, so
+# its clean subset is the whole corpus. realorn-asap's is 36 figures of 787, and
+# the pooled ASAP number is NOT a holdout — quoting it as one is a mistake this
+# project has already made once, so the column is labelled and the assertion
+# below refuses to print the table if the split ever stops holding.
+DEC_CORPORA = [("batik", "realorn-batik"), ("asap", "realorn-asap")]
+
+dec = {(t, c): load(f"decoded-{t}-{c}.json") for t, _ in DECODED for c, _ in DEC_CORPORA}
+if any(dec.values()):
+    assert all(r["clean_only"]["groups"] == r["groups"]
+               for (t, c), r in dec.items() if r and c == "batik"), \
+        "realorn-batik is no longer wholly clean; the table's labelling is now wrong"
+    out.append("\n## 6b. The same head read through the decode\n")
+    out.append("`eval/run_attribution_decoded.py`. Once the decode has called a played note an\n"
+               "insertion, `log P(matched)` is known to be zero and the head's remaining two\n"
+               "factors — `gate` = P(elaborates a written note | insertion) and the ranking over\n"
+               "score notes — are exactly the posterior wanted. The threshold is on their product\n"
+               "at `ORNAMENT_MIN_PROB`, not on the gate alone. No retraining is involved; this is\n"
+               "the same checkpoint read the way the pipeline reads it.\n")
+    out.append("| model | holdout | figures | group-exact | note acc | called orn. | false on matched |")
+    out.append("|---|---|---|---|---|---|---|")
+    for t, lbl in DECODED:
+        for c, clbl in DEC_CORPORA:
+            r = dec.get((t, c))
+            suffix = "" if c == "batik" else " (clean subset)"
+            if not r:
+                # Printed as a gap rather than dropped: a model missing from this
+                # table has not been scored this way, which is not the same as
+                # scoring badly, and the shipped v3 is currently one of them.
+                out.append(f"| {lbl} | {clbl}{suffix} | — | — | — | — | — |")
+                continue
+            k = r["clean_only"]
+            out.append(f"| {lbl} | {clbl}{suffix} | {k['groups']} | **{k['group_exact']:.4f}** | "
+                       f"{k['note_acc']:.4f} | {k['called_ornament']} | {k['false_on_matched']:.4f} |")
+    out.append("\nA `—` row is an evaluation not yet run, not a zero.")
+    pooled = [(lbl, dec[(t, "asap")]) for t, lbl in DECODED if dec.get((t, "asap"))]
+    if pooled:
+        out.append("\nPooled `realorn-asap`, **not a holdout** — 92.9 % of its rows are performances\n"
+                   "the match head trained on, and 66 of them selected the checkpoint. Reported so\n"
+                   "the clean 36-figure column above is not mistaken for the whole corpus:\n")
+        out.append("| model | figures | group-exact |\n|---|---|---|")
+        for lbl, r in pooled:
+            out.append(f"| {lbl} | {r['groups']} | {r['group_exact']:.4f} |")
+
+    # Point estimates on n=1 cells have repeatedly read as settled and turned out
+    # not to be, so the interval ships with the number. Self-comparisons (a run
+    # bootstrapped against itself, run to time the harness) carry no information
+    # and are dropped rather than printed as a zero.
+    boots = [b for b in (load(f"boot-{t}.json") for t, _ in DECODED)
+             if b and b["base_ckpt"] != b["cand_ckpt"]]
+    if boots:
+        out.append("\n### Is the difference real?\n")
+        out.append("Paired bootstrap over the figures themselves rather than over performances\n"
+                   "(`eval/compare_attribution.py`, 20 000 resamples). Group-exact is monotone under\n"
+                   "attributing more notes, so the interval alone cannot separate a better predictor\n"
+                   "from a louder one — a louder one loses figures roughly in proportion to what it\n"
+                   "gains, which is why gained/lost is in the table.\n")
+        short = lambda c: c.split("/")[1] if "/" in c else c  # noqa: E731
+        out.append("| base | candidate | group-exact | Δ | 95 % CI | p | gained | lost | figures |")
+        out.append("|---|---|---|---|---|---|---|---|---|")
+        for b in boots:
+            out.append(f"| {short(b['base_ckpt'])} | {short(b['cand_ckpt'])} | "
+                       f"{b['base']:.4f} → {b['cand']:.4f} | {b['diff']:+.4f} | "
+                       f"[{b['ci95'][0]:+.4f}, {b['ci95'][1]:+.4f}] | {b['p']:.5f} | "
+                       f"{b['gained']} | {b['lost']} | {b['figures']} |")
+        # Named from the files rather than from memory of them: the baseline a
+        # candidate is measured against decides what the interval means, and
+        # `v12both` is not a model anyone can download.
+        unshipped = sorted({short(b["base_ckpt"]) for b in boots} - {"mlign-v3.pt", "mlign-v2.pt"})
+        if unshipped:
+            out.append("\nThe baseline in every row above is "
+                       f"{', '.join(f'`{u}`' for u in unshipped)}, which never shipped. An interval\n"
+                       "against `models/mlign-v3.pt` needs its own run of `compare_attribution.py`\n"
+                       "and is not yet in `eval/results/`.\n")
+
+# ---- 7. dev-long table. A top-level section: it is an alignment tier, and as a
+# `###` it nested under whichever ornament section preceded it.
+out.append("\n## 7. dev-long tier (train-split, never test)\n")
 out.append("| checkpoint | match F | ins F | del F |\n|---|---|---|---|")
 for name in ["v3", "v5e5", "v6e10", "v6e023", "v6e024", "v6e025"]:
     res = load(f"devlong-{name}.json")

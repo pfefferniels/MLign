@@ -72,6 +72,10 @@ def main() -> None:
                          "by that margin instead")
     ap.add_argument("--device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     ap.add_argument("--threads", type=int, default=4)
+    # Every comparison in this project rests on n=1, so run-to-run noise and
+    # design effect have never been separable. 0 reproduces every run so far.
+    ap.add_argument("--seed", type=int, default=0,
+                    help="shifts weight init and all three batch orders together")
     args = ap.parse_args()
 
     if args.device == "auto":
@@ -93,7 +97,8 @@ def main() -> None:
     dedicated_paths = sorted({p for g in args.val_corpus.split(",") if g.strip() for p in glob.glob(g.strip())}) if args.val_corpus else []
     train_paths = [p for p in paths if p not in set(dedicated_paths)]
     rows = load_corpus(train_paths)
-    rng = torch.Generator().manual_seed(0)
+    torch.manual_seed(args.seed)
+    rng = torch.Generator().manual_seed(args.seed)
     perm = torch.randperm(len(rows), generator=rng).tolist()
     n_val = max(1, int(len(rows) * args.val_frac))
     val_rows = [rows[i] for i in perm[:n_val]]
@@ -116,9 +121,9 @@ def main() -> None:
     elif args.val_corpus:
         raise SystemExit(f"--val-corpus {args.val_corpus!r} matched NO files — refusing silent fallback to mixed val")
 
-    train_b = CorpusBatcher(train_rows, max_tokens=args.max_tokens, seed=1)
-    val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2)
-    sel_b = CorpusBatcher(sel_rows, max_tokens=args.max_tokens, seed=3) if sel_rows else None
+    train_b = CorpusBatcher(train_rows, max_tokens=args.max_tokens, seed=1 + 10 * args.seed)
+    val_b = CorpusBatcher(val_rows, max_tokens=args.max_tokens, seed=2 + 10 * args.seed)
+    sel_b = CorpusBatcher(sel_rows, max_tokens=args.max_tokens, seed=3 + 10 * args.seed) if sel_rows else None
 
     model = NoteAligner(ModelConfig(d_model=args.d_model, n_layers=args.n_layers,
                                     matchability=args.matchability,

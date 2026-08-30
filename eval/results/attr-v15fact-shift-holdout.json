@@ -1,0 +1,22 @@
+{
+  "rows": 2000,
+  "detect_p": 0.9502,
+  "detect_r": 0.8668,
+  "detect_f": 0.9066,
+  "attr_acc": 0.7877,
+  "attr_n": 119572,
+  "group_exact": 0.4644,
+  "group_n": 29599,
+  "by_match_head": {
+    "flagged_acc": 0.8742,
+    "flagged_n": 107733,
+    "vetoed_acc": 0.0,
+    "vetoed_n": 11839,
+    "veto_share": 0.099,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2999
+  },
+  "ckpt": "runs/v15fact/best.pt",
+  "corpus": "data/corpus/shift-holdout.jsonl",
+  "tier": "synthetic-only"
+}
