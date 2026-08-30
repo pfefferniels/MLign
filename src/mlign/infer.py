@@ -12,6 +12,8 @@ v0 pipeline (DESIGN §4, two-phase-lite):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 
@@ -22,6 +24,47 @@ MAX_SINGLE_TOKENS = 2000
 WIN_SCORE = 384  # score notes per window
 MARGIN_SEC = 3.0
 UNCOVERED_NULL = 1e9  # null logit for a note no window covered
+# gate is P(elaborates a written note | insertion), so its own .5 is the
+# decision boundary — a slip or a repeat restart is an insertion that
+# elaborates nothing.
+ORNAMENT_MIN_PROB = 0.5
+
+
+@dataclass(frozen=True)
+class Ornaments:
+    """The attribution head's two questions, separated.
+
+    The head emits, for each played note,
+
+        score columns = log_ins + logsigmoid(gate) + log_rank
+        none column   = logaddexp(log_ins + logsigmoid(-gate), log_matched)
+
+    so its argmax is dominated by the match head: `log_matched` alone sends
+    99 % of re-struck ornament notes to the none column, and on real Batik that
+    silences the head on 48.8 % of all ornament figures. Once the DECODE has
+    ruled a played note an insertion, `log_matched` is known to be zero and the
+    two remaining factors are exactly what is wanted — `gate` is by construction
+    P(elaborates a written note | insertion), and `rank` is the ranking over
+    which note. Both survive the conditioning and are recovered here, so no
+    retraining is involved.
+    """
+
+    rank: np.ndarray      # (m, n) log P(anchor = i), normalized over score notes
+    log_gate: np.ndarray  # (m,)   log P(elaborates something | this is an insertion)
+
+    def anchor_of(self, j: int) -> tuple[int, float]:
+        """Best anchor for played note `j`, and P(it ornaments at all)."""
+        return int(self.rank[j].argmax()), float(np.exp(self.log_gate[j]))
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """Window-averaged logits for one piece."""
+
+    sim: np.ndarray     # (n, m)
+    null_s: np.ndarray  # (n,)
+    null_p: np.ndarray  # (m,)
+    ornaments: Ornaments | None  # None when the checkpoint has no attribution head
 
 
 def tables_to_row(score: ScoreTable, perf: PerfTable) -> dict:
@@ -41,9 +84,14 @@ def tables_to_row(score: ScoreTable, perf: PerfTable) -> dict:
     }
 
 
+def _logsumexp(x: np.ndarray, axis: int) -> np.ndarray:
+    peak = np.max(x, axis=axis, keepdims=True)
+    return (peak + np.log(np.sum(np.exp(x - peak), axis=axis, keepdims=True))).squeeze(axis)
+
+
 @torch.no_grad()
-def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Returns (sim (n,m), null_s (n,), null_p (m,)) accumulated over windows."""
+def accumulate(model, row: dict, device: str) -> Evidence:
+    """Forward the piece, whole or in windows, and average the logits."""
     n = len(row["score"])
     m = len(row["perf"])
 
@@ -58,6 +106,9 @@ def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.nda
     null_s_cnt = np.zeros(n, dtype=np.float32)
     null_p = np.zeros(m, dtype=np.float32)
     null_p_cnt = np.zeros(m, dtype=np.float32)
+    rank = np.full((m, n), -1e9, dtype=np.float32)
+    log_gate = np.zeros(m, dtype=np.float32)
+    attr_cnt = np.zeros(m, dtype=np.float32)
 
     for s0, s1, p0, p1 in pairs:
         sub = {
@@ -84,6 +135,23 @@ def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.nda
         null_p[p0:p1] += lp2s[:mp, ns]
         null_p_cnt[p0:p1] += 1.0
 
+        lattr = out.get("logits_attr")
+        if lattr is None:
+            continue
+        cols = lattr[0].float().cpu().numpy()[:mp, :ns]
+        # log_ins is the match head's own P(insertion), the same quantity the
+        # head was conditioned on; dividing it out leaves logsigmoid(gate).
+        lp = lp2s[:mp, : ns + 1]
+        log_ins = lp[:, ns] - _logsumexp(lp, axis=1)
+        block_gate = _logsumexp(cols, axis=1) - log_ins
+        region = rank[p0:p1, s0:s1]
+        first = attr_cnt[p0:p1] == 0
+        region[first] = 0.0
+        region += cols - _logsumexp(cols, axis=1)[:, None]
+        rank[p0:p1, s0:s1] = region
+        log_gate[p0:p1] += np.minimum(block_gate, 0.0)
+        attr_cnt[p0:p1] += 1.0
+
     cnt[cnt == 0] = 1.0
     sim = sim / cnt
     null_s = null_s / np.maximum(null_s_cnt, 1.0)
@@ -91,7 +159,22 @@ def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.nda
     # notes never covered by any window: strongly "unmatched"
     null_s[null_s_cnt == 0] = UNCOVERED_NULL
     null_p[null_p_cnt == 0] = UNCOVERED_NULL
-    return sim, null_s, null_p
+
+    orn = None
+    if attr_cnt.any():
+        seen = np.maximum(attr_cnt, 1.0)
+        rank = rank / seen[:, None]
+        # a note no window scored cannot be attributed to anything
+        rank[attr_cnt == 0] = -1e9
+        log_gate = np.where(attr_cnt == 0, -1e9, log_gate / seen)
+        orn = Ornaments(rank=rank, log_gate=log_gate)
+    return Evidence(sim=sim, null_s=null_s, null_p=null_p, ornaments=orn)
+
+
+def accumulate_logits(model, row: dict, device: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The alignment logits alone — (sim (n,m), null_s (n,), null_p (m,))."""
+    ev = accumulate(model, row, device)
+    return ev.sim, ev.null_s, ev.null_p
 
 
 def coarse_windows(row: dict, n: int, m: int) -> list[tuple[int, int, int, int]]:
@@ -141,7 +224,8 @@ def coarse_windows(row: dict, n: int, m: int) -> list[tuple[int, int, int, int]]
 
 
 def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
-           anchor_conf: float = 0.35, tol_sec: float = 1.0) -> list[dict]:
+           anchor_conf: float = 0.35, tol_sec: float = 1.0,
+           ornaments: Ornaments | None = None) -> list[dict]:
     n, m = sim.shape
     s_pitch = np.array([r[2] for r in row["score"]], dtype=int)
     p_pitch = np.array([r[2] for r in row["perf"]], dtype=int)
@@ -274,7 +358,12 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
     for j in range(m):
         if matched_p[j] < 0:
             null_share = float(_softmax(np.concatenate([sim[:, j], [null_p[j]]]), axis=0)[-1])
-            triples.append({"label": "insertion", "perf_idx": j, "confidence": null_share})
+            ins = {"label": "insertion", "perf_idx": j, "confidence": null_share}
+            if ornaments is not None:
+                anchor, prob = ornaments.anchor_of(j)
+                if prob >= ORNAMENT_MIN_PROB:
+                    ins["ornament"] = {"anchor_score_idx": anchor, "confidence": prob}
+            triples.append(ins)
     return triples
 
 
@@ -403,8 +492,8 @@ def _assign_monotone(expected, actual, tol, conf_block):
 
 def align_with_model(model, score: ScoreTable, perf: PerfTable, device: str = "cpu") -> list[dict]:
     row = tables_to_row(score, perf)
-    sim, null_s, null_p = accumulate_logits(model, row, device)
-    triples = decode(row, sim, null_s, null_p)
+    ev = accumulate(model, row, device)
+    triples = decode(row, ev.sim, ev.null_s, ev.null_p, ornaments=ev.ornaments)
     out = []
     for t in triples:
         conf = t.get("confidence")
@@ -422,9 +511,16 @@ def align_with_model(model, score: ScoreTable, perf: PerfTable, device: str = "c
                 "confidence": conf,
             })
         else:
-            out.append({
+            ins = {
                 "label": "insertion",
                 "perf_id": str(perf.notes["id"][t["perf_idx"]]),
                 "confidence": conf,
-            })
+            }
+            orn = t.get("ornament")
+            if orn is not None:
+                ins["ornament"] = {
+                    "anchor_score_id": str(score.notes["id"][orn["anchor_score_idx"]]),
+                    "confidence": orn["confidence"],
+                }
+            out.append(ins)
     return out

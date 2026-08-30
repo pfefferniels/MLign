@@ -55,7 +55,7 @@ function parseArgs(argv) {
   const pos = [];
   const opt = {
     robustness: 'medium', jitter: 12, ornaments: 0, addRate: null, ornJitter: null, minDur: null,
-    exaggerate: false, profile: 'modern', breadth: 1, imprecision: '',
+    exaggerate: false, profile: 'modern', breadth: 1, imprecision: '', signShare: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -71,13 +71,14 @@ function parseArgs(argv) {
       if (argv[i + 1] && !argv[i + 1].startsWith('--')) opt.profile = argv[++i];
     } else if (a === '--breadth') opt.breadth = Number(argv[++i]);
     else if (a === '--imprecision') opt.imprecision = argv[++i];
+    else if (a === '--sign-share') opt.signShare = Number(argv[++i]);
     else pos.push(a);
   }
   if (pos.length !== 3) {
     throw new Error(
       'usage: generate.mjs <out.jsonl> <numPieces> <seed> [--robustness p] [--jitter ms]\n' +
         '       [--ornaments rate] [--exaggerate [modern|early]] [--breadth f]\n' +
-        '       [--imprecision subtle|natural|early]',
+        '       [--imprecision subtle|natural|early] [--sign-share 0..1]',
     );
   }
   if (opt.exaggerate && !EXAG_PROFILES[opt.profile]) {
@@ -85,6 +86,9 @@ function parseArgs(argv) {
   }
   if (opt.imprecision && !IMPRECISION_LEVELS[opt.imprecision]) {
     throw new Error(`unknown imprecision level: ${opt.imprecision}`);
+  }
+  if (opt.signShare !== null && !(opt.signShare > 0 && opt.signShare < 1)) {
+    throw new Error(`--sign-share must be strictly between 0 and 1, got ${opt.signShare}`);
   }
   return { out: pos[0], n: Number(pos[1]), seed: BigInt(pos[2]), ...opt };
 }
@@ -150,6 +154,38 @@ export const ORN_KINDS = [
  */
 export const GRACE_RUN = [[1, 0.638], [2, 0.220], [3, 0.094], [4, 0.048]];
 
+/**
+ * The signs that `realorn-*` ground truth can score. A grace is itself a
+ * written snote so it gets matched rather than attributed, an arpeggio carries
+ * no ornament sign, and a tremolo spans too wide an interval to read as a
+ * note-generating figure — `real_orn_gt.py` drops all three.
+ */
+const SCORABLE_SIGNS = new Set(['trill', 'mordent', 'inverted-mordent', 'turn', 'inverted-turn']);
+
+/**
+ * Move ornament-kind mass toward the signs the benchmark can score, holding the
+ * overall ornament RATE fixed.
+ *
+ * The census mix spends 77.8 % of the budget on grace, arpeggio and tremolo,
+ * which `realorn-*` never scores, and those kinds never re-strike the
+ * principal's pitch (`gracePitches` emits `pitch ± i, i >= 1`) and always
+ * precede it. Real Batik figures are the opposite: 51.8 % of their notes sit on
+ * the anchor's own pitch and 94.9 % of figures follow their principal, against
+ * 26.7 % and 34.3 % here. Those unison re-strikes are what the match head
+ * vetoes, and a vetoed note cannot be attributed at all.
+ *
+ * `share` is the fraction given to the scorable signs; the census value is
+ * 0.221. Raising it trains a model deliberately off-distribution for score
+ * statistics, in exchange for the figures the benchmark measures.
+ */
+export function reweightKinds(kinds, share) {
+  const scorable = (entry) => SCORABLE_SIGNS.has(entry[0]);
+  const mass = (pred) => kinds.filter(pred).reduce((sum, [, w]) => sum + w, 0);
+  const up = share / mass(scorable);
+  const down = (1 - share) / mass((e) => !scorable(e));
+  return kinds.map(([kind, w]) => [kind, w * (SCORABLE_SIGNS.has(kind) ? up : down)]);
+}
+
 /** Box-Muller — JavaRandom is a port of java.util.Random minus nextGaussian. */
 function gaussian(rng) {
   const u = Math.max(rng.nextDouble(), 1e-12);
@@ -197,7 +233,7 @@ function gracePitches(rng, pitch) {
  *
  * Returns `{ header, map }`, both '' when nothing was sampled.
  */
-export function sampleOrnaments(piece, rng, rateScale, breadth = 1) {
+export function sampleOrnaments(piece, rng, rateScale, breadth = 1, kinds = ORN_KINDS) {
   const part = piece.parts[0];
   const total = piece.parts.reduce((a, p) => a + p.notes.length, 0);
   // Stochastic rounding, not Math.round. A sampled piece is ~95 notes, so the
@@ -223,7 +259,7 @@ export function sampleOrnaments(piece, rng, rateScale, breadth = 1) {
   // Rejection sampling over part 1 — cheaper than shuffling, and the retry
   // budget keeps a piece with few eligible notes from spinning.
   for (let tries = 0; requests.length < want && tries < want * 20; tries++) {
-    const kind = pick(rng, ORN_KINDS);
+    const kind = pick(rng, kinds);
     const id = (i) => `p${part.number}n${i}`;
 
     if (kind === 'arpeggio') {
@@ -465,6 +501,7 @@ async function main() {
   if (args.exaggerate) await loadExaggeration();
   const preset = PRESETS[args.robustness];
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
+  const ornKinds = args.signShare === null ? ORN_KINDS : reweightKinds(ORN_KINDS, args.signShare);
   // The robustness layer's consonant additions land in the SAME attribution
   // channel as espressivo's ornaments — an added octave elaborates its anchor
   // exactly as a trill note does — so their rate is part of the ornament base
@@ -509,7 +546,8 @@ async function main() {
   for (let i = 0; i < args.n; i++) {
     const rng = new JavaRandom(args.seed * 1000003n + BigInt(i));
     const piece = samplePieceV4(rng, i, WANT, OPT);
-    const ornDefs = args.ornaments > 0 ? sampleOrnaments(piece, rng, args.ornaments, args.breadth) : null;
+    const ornDefs =
+      args.ornaments > 0 ? sampleOrnaments(piece, rng, args.ornaments, args.breadth, ornKinds) : null;
     const exagFactors = args.exaggerate ? sampleExagFactors(rng, args.profile) : null;
     const imprecision = sampleImprecision(rng, args.imprecision);
     let row;
