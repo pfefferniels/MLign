@@ -1,0 +1,17 @@
+{
+  "figures": 740,
+  "base": 0.3297,
+  "cand": 0.4784,
+  "diff": 0.1486,
+  "ci95": [
+    0.1149,
+    0.1824
+  ],
+  "p": 5e-05,
+  "gained": 145,
+  "lost": 35,
+  "base_ckpt": "models/mlign-v3.pt",
+  "cand_ckpt": "models/mlign-v4.pt",
+  "corpus": "batik",
+  "clean_only": false
+}

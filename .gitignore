@@ -5,9 +5,12 @@ __pycache__/
 runs/
 .venv/
 venv/
+# `*.pt` above hides checkpoints; every released one needs its own negation here
+# or it is silently absent from the release.
 !models/mlign-v1.pt
 !models/mlign-v2.pt
 !models/mlign-v3.pt
+!models/mlign-v4.pt
 
 # agent working notes (kept locally, not published)
 notes/

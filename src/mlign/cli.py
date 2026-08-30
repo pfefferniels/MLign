@@ -9,7 +9,7 @@ SCORE: .mei (parsed via espressivo → exact xml:ids) or .musicxml/.xml
   match  — partitura match file (parangonar-compatible)
   jsonl  — mpmify row schema mirror
 
-Model checkpoint resolution: --ckpt, else $MLIGN_CKPT, else models/mlign-v3.pt
+Model checkpoint resolution: --ckpt, else $MLIGN_CKPT, else models/mlign-v4.pt
 (the released model) relative to the repo root.
 """
 
@@ -128,7 +128,7 @@ def main(argv=None) -> None:
     al.add_argument("performance")
     al.add_argument("-o", "--out", default="-")
     al.add_argument("--format", choices=["json", "match", "jsonl"], default="json")
-    al.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "models/mlign-v3.pt")))
+    al.add_argument("--ckpt", default=os.environ.get("MLIGN_CKPT", str(ROOT / "models/mlign-v4.pt")))
     al.add_argument("--mdiv", type=int, default=0)
     al.add_argument("--engine", choices=["model", "baseline"], default="model")
     args = ap.parse_args(argv)

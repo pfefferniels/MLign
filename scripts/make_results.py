@@ -63,17 +63,17 @@ m3 = load("mlign-v3-robust-test.json"); m5 = load("v5real-e005-robust-test.json"
 # above is a different thing entirely — the day-2 training run that happened to
 # be called v3 — and the two must not be conflated in a table.
 v3f = load("v9fact-robust-test.json"); v9o = load("v9off-robust-test.json")
-# The v4 candidate, still under promotion: `runs/v15fact/best.pt`, not in
-# `models/`. Promoting it means copying the checkpoint there and rewriting this
-# row's label — no other line in this file names it.
+# `models/mlign-v4.pt` is the run named v15fact, epoch 19 — the same trap as
+# v3/v9fact above, and the same rule: name the run in the label so the two
+# cannot be conflated.
 v4 = load("v15fact-robust-test.json")
 out.append("## 1. Headline: nASAP robust test split (untouched holdout)\n")
 out.append("84 performances / 27 pieces: nASAP alignments flagged robust ∩ MAESTRO-v2 test pieces\n"
            "(`eval/split.py`). No training, self-supervision, selection or dev data touches these\n"
            "pieces (all self-sup/real-GT corpora exclude the folders).\n")
 out.append("| system | match F | ins F | del F | n |\n|---|---|---|---|---|")
-if v3f: out.append(row("**MLign v3** (`models/mlign-v3.pt` = v9fact, conditioned attribution head)", v3f, bold=True))
-if v4: out.append(row("MLign v4 candidate (`runs/v15fact` epoch 19 — orn4 corpus, factored attribution)", v4))
+if v4: out.append(row("**MLign v4** (`models/mlign-v4.pt` = v15fact epoch 19, orn4 corpus, factored attribution)", v4, bold=True))
+if v3f: out.append(row("MLign v3 (`models/mlign-v3.pt` = v9fact, conditioned attribution head)", v3f))
 if v9o: out.append(row("MLign v9off (v3's corpus, unconditioned head — the alignment high-water mark)", v9o))
 if v2: out.append(row("MLign v2 (`models/mlign-v2.pt` = v8early epoch 30)", v2))
 if v7: out.append(row("MLign v7attr epoch 22 (attribution, pre-early-corpus)", v7))
@@ -83,28 +83,44 @@ if d: out.append(row("DualDTW (parangonar 3.1.0, hand-tuned SOTA)", d))
 if g: out.append(row("TheGlueNote (parangonar 3.1.0, ISMIR 2024)", g))
 if m3: out.append(row("MLign v3-the-run (day 2, unrelated to `mlign-v3.pt`)", m3))
 if m5: out.append(row("MLign v5real epoch 5 (dev-4x22 record — the wrong pick)", m5))
-if v3f and d:
-    w, t, l, p = paired(v3f, d)
-    out.append(f"\nPaired per-performance, MLign v3 vs DualDTW: **{w} wins / {t} ties / {l} losses**, "
+if v4 and d:
+    w, t, l, p = paired(v4, d)
+    out.append(f"\nPaired per-performance, MLign v4 vs DualDTW: **{w} wins / {t} ties / {l} losses**, "
                f"one-sided sign test p = {p:.2e}.")
-if v3f and v2:
-    w, t, l, p = paired(v3f, v2)
-    out.append(f"MLign v3 vs MLign v2: {w} wins / {t} ties / {l} losses, p = {p:.2f} — **a tie, and "
-               f"reported as one.** v3 is not a better aligner than v2; it is the same aligner with "
-               f"an ornament head that works on real recordings (§6). The alignment number is here "
-               f"to show that the head was not paid for out of it.")
 if v4 and v3f and v2:
     w, t, l, p = paired(v4, v3f)
     w2, t2, l2, p2 = paired(v4, v2)
-    out.append(f"\nMLign v4 candidate vs MLign v3: {w} wins / {t} ties / {l} losses, p = {p:.2f}; vs v2 "
-               f"{w2}W / {t2}T / {l2}L, p = {p2:.2f} — **a tie against both**, which is what a "
-               f"checkpoint promoted for attribution has to show. Where it does move is del-F: "
-               f"{v4['aggregate']['deletion_f']:.4f}, against v3's "
-               f"{v3f['aggregate']['deletion_f']:.4f} and v2's "
-               f"{v2['aggregate']['deletion_f']:.4f} — so v2 keeps the deletion record. "
-               f"The alignment cost reported in the ornament notes is measured against v12both "
-               f"(del-F 0.9081), a checkpoint that never shipped; against the shipped models it "
-               f"does not appear.")
+    # The whole case for promoting v4: it buys attribution without spending
+    # alignment. Both halves are stated with their numbers, and so is the one
+    # comparison that does go the other way.
+    dec4 = load("decoded-v15fact-batik.json"); dec3 = load("decoded-v9fact-batik.json")
+    gain = (f", while ornament attribution goes {dec3['clean_only']['group_exact']:.4f} -> "
+            f"{dec4['clean_only']['group_exact']:.4f} on the clean Batik figures (§6b)"
+            if dec4 and dec3 else " (§6b)")
+    out.append(f"MLign v4 vs MLign v3: {w} wins / {t} ties / {l} losses, p = {p:.2f}; vs MLign v2 "
+               f"{w2}W / {t2}T / {l2}L, p = {p2:.2f} — **a tie against every shipped model**{gain}. "
+               f"That is the trade v4 was promoted for, and it costs nothing on the released "
+               f"baseline: del-F is {v4['aggregate']['deletion_f']:.4f} against v3's "
+               f"{v3f['aggregate']['deletion_f']:.4f}, ins-F {v4['aggregate']['insertion_f']:.4f} "
+               f"against {v3f['aggregate']['insertion_f']:.4f}.")
+    v12 = load("v12both-robust-test.json")
+    if v12:
+        w3, t3, l3, p3 = paired(v12, v4)
+        out.append(f"\nWhere it does lose. v2 still holds the deletion record at "
+                   f"{v2['aggregate']['deletion_f']:.4f}. And `v12both` beats v4 on alignment: "
+                   f"{w3} wins / {t3} ties / {l3} losses, sign test p = {p3:.4f}, with match-F "
+                   f"{mean_sd(v12)[0]:.4f} against {mean_sd(v4)[0]:.4f} and del-F "
+                   f"{v12['aggregate']['deletion_f']:.4f} against "
+                   f"{v4['aggregate']['deletion_f']:.4f}. That comparison is stated here rather "
+                   f"than left in the ornament notes to be found, with what it does and does not "
+                   f"mean: v12both is a checkpoint no release ever used, so it bounds what a "
+                   f"better corpus might have given, not what v4 took away from anyone.")
+if v3f and v2:
+    w, t, l, p = paired(v3f, v2)
+    out.append(f"\nMLign v3 vs MLign v2, for the record: {w} wins / {t} ties / {l} losses, "
+               f"p = {p:.2f} — a tie then too. Neither v3 nor v4 is a better aligner than v2; both "
+               f"are the same aligner with a better ornament head, and the alignment numbers are "
+               f"here to show the head was not paid for out of them.")
 if v2 and m21:
     w, t, l, p = paired(v2, m21)
     out.append(f"MLign v2 vs MLign v1: **{w} wins / {t} ties / {l} losses**, "
@@ -276,7 +292,7 @@ if any(attr.values()):
 # learned, this one says what ships.
 DECODED = [("v9fact", "v3 (=v9fact)"), ("v12both", "v12both (orn2, evidenced)"),
            ("v15evid", "v15evid (orn4, evidenced)"),
-           ("v15fact", "**v4 cand.** (=v15fact, orn4, factored)")]
+           ("v15fact", "**v4** (=v15fact, orn4, factored)")]
 # realorn-batik has no overlap with anything MLign trained or selected on, so
 # its clean subset is the whole corpus. realorn-asap's is 36 figures of 787, and
 # the pooled ASAP number is NOT a holdout — quoting it as one is a mistake this
@@ -305,13 +321,14 @@ if any(dec.values()):
             if not r:
                 # Printed as a gap rather than dropped: a model missing from this
                 # table has not been scored this way, which is not the same as
-                # scoring badly, and the shipped v3 is currently one of them.
+                # scoring badly.
                 out.append(f"| {lbl} | {clbl}{suffix} | — | — | — | — | — |")
                 continue
             k = r["clean_only"]
             out.append(f"| {lbl} | {clbl}{suffix} | {k['groups']} | **{k['group_exact']:.4f}** | "
                        f"{k['note_acc']:.4f} | {k['called_ornament']} | {k['false_on_matched']:.4f} |")
-    out.append("\nA `—` row is an evaluation not yet run, not a zero.")
+    if not all(dec.values()):
+        out.append("\nA `—` row is an evaluation not yet run, not a zero.")
     pooled = [(lbl, dec[(t, "asap")]) for t, lbl in DECODED if dec.get((t, "asap"))]
     if pooled:
         out.append("\nPooled `realorn-asap`, **not a holdout** — 92.9 % of its rows are performances\n"
@@ -325,8 +342,11 @@ if any(dec.values()):
     # not to be, so the interval ships with the number. Self-comparisons (a run
     # bootstrapped against itself, run to time the harness) carry no information
     # and are dropped rather than printed as a zero.
-    boots = [b for b in (load(f"boot-{t}.json") for t, _ in DECODED)
-             if b and b["base_ckpt"] != b["cand_ckpt"]]
+    # Globbed, not keyed off DECODED: a comparison is named by its pair, and the
+    # same candidate can be measured against more than one baseline.
+    boots = sorted((json.loads(p.read_text()) for p in R.glob("boot-*.json")),
+                   key=lambda b: (b["base_ckpt"], b["cand_ckpt"]))
+    boots = [b for b in boots if b["base_ckpt"] != b["cand_ckpt"]]
     if boots:
         out.append("\n### Is the difference real?\n")
         out.append("Paired bootstrap over the figures themselves rather than over performances\n"
@@ -343,14 +363,14 @@ if any(dec.values()):
                        f"[{b['ci95'][0]:+.4f}, {b['ci95'][1]:+.4f}] | {b['p']:.5f} | "
                        f"{b['gained']} | {b['lost']} | {b['figures']} |")
         # Named from the files rather than from memory of them: the baseline a
-        # candidate is measured against decides what the interval means, and
-        # `v12both` is not a model anyone can download.
-        unshipped = sorted({short(b["base_ckpt"]) for b in boots} - {"mlign-v3.pt", "mlign-v2.pt"})
+        # candidate is measured against decides what the interval means, and a
+        # run directory is not a model anyone can download.
+        unshipped = sorted({short(b["base_ckpt"]) for b in boots}
+                           - {f"mlign-v{i}.pt" for i in range(1, 10)})
         if unshipped:
-            out.append("\nThe baseline in every row above is "
-                       f"{', '.join(f'`{u}`' for u in unshipped)}, which never shipped. An interval\n"
-                       "against `models/mlign-v3.pt` needs its own run of `compare_attribution.py`\n"
-                       "and is not yet in `eval/results/`.\n")
+            out.append(f"\nRows based on {', '.join(f'`{u}`' for u in unshipped)} bound what a "
+                       "better corpus could have given.\nOnly a row based on a `models/mlign-*.pt` "
+                       "baseline says what a user upgrading\nactually gains.\n")
 
 # ---- 7. dev-long table. A top-level section: it is an alignment tier, and as a
 # `###` it nested under whichever ornament section preceded it.

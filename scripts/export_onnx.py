@@ -17,7 +17,7 @@ learned `scale`. `scripts/test_onnx_parity.py` is what proves it.
 
 Usage:
   PYTHONPATH=src .venv/bin/python scripts/export_onnx.py \
-      --ckpt models/mlign-v3.pt --out models/mlign-v3.onnx
+      --ckpt models/mlign-v4.pt --out models/mlign-v4.onnx
 """
 
 from __future__ import annotations
@@ -599,8 +599,8 @@ def summarize(onnx_model: onnx.ModelProto, path: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--ckpt", default="models/mlign-v3.pt")
-    ap.add_argument("--out", default="models/mlign-v3.onnx")
+    ap.add_argument("--ckpt", default="models/mlign-v4.pt")
+    ap.add_argument("--out", default="models/mlign-v4.onnx")
     ap.add_argument("--opset", type=int, default=17)
     ap.add_argument("--fp16", action="store_true",
                     help="store large weights as float16 + Cast (halves the download; compute stays fp32)")

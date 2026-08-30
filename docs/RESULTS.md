@@ -14,7 +14,8 @@ pieces (all self-sup/real-GT corpora exclude the folders).
 
 | system | match F | ins F | del F | n |
 |---|---|---|---|---|
-| **MLign v3** (`models/mlign-v3.pt` = v9fact, conditioned attribution head) | **0.9896 ± 0.0165** | 0.9524 | 0.8913 | 84 |
+| **MLign v4** (`models/mlign-v4.pt` = v15fact epoch 19, orn4 corpus, factored attribution) | **0.9898 ± 0.0158** | 0.9543 | 0.8960 | 84 |
+| MLign v3 (`models/mlign-v3.pt` = v9fact, conditioned attribution head) | 0.9896 ± 0.0165 | 0.9524 | 0.8913 | 84 |
 | MLign v9off (v3's corpus, unconditioned head — the alignment high-water mark) | 0.9901 ± 0.0155 | 0.9549 | 0.9015 | 84 |
 | MLign v2 (`models/mlign-v2.pt` = v8early epoch 30) | 0.9895 ± 0.0164 | 0.9485 | 0.9036 | 84 |
 | MLign v7attr epoch 22 (attribution, pre-early-corpus) | 0.9899 ± 0.0156 | 0.9532 | 0.9006 | 84 |
@@ -25,8 +26,12 @@ pieces (all self-sup/real-GT corpora exclude the folders).
 | MLign v3-the-run (day 2, unrelated to `mlign-v3.pt`) | 0.9833 ± 0.0201 | 0.9271 | 0.7901 | 84 |
 | MLign v5real epoch 5 (dev-4x22 record — the wrong pick) | 0.9799 ± 0.0246 | 0.9261 | 0.7680 | 84 |
 
-Paired per-performance, MLign v3 vs DualDTW: **68 wins / 3 ties / 13 losses**, one-sided sign test p = 1.90e-10.
-MLign v3 vs MLign v2: 35 wins / 18 ties / 31 losses, p = 0.36 — **a tie, and reported as one.** v3 is not a better aligner than v2; it is the same aligner with an ornament head that works on real recordings (§6). The alignment number is here to show that the head was not paid for out of it.
+Paired per-performance, MLign v4 vs DualDTW: **68 wins / 4 ties / 12 losses**, one-sided sign test p = 6.01e-11.
+MLign v4 vs MLign v3: 30 wins / 22 ties / 32 losses, p = 0.65; vs MLign v2 32W / 17T / 35L, p = 0.69 — **a tie against every shipped model**, while ornament attribution goes 0.3297 -> 0.4784 on the clean Batik figures (§6b). That is the trade v4 was promoted for, and it costs nothing on the released baseline: del-F is 0.8960 against v3's 0.8913, ins-F 0.9543 against 0.9524.
+
+Where it does lose. v2 still holds the deletion record at 0.9036. And `v12both` beats v4 on alignment: 42 wins / 18 ties / 24 losses, sign test p = 0.0178, with match-F 0.9906 against 0.9898 and del-F 0.9081 against 0.8960. That comparison is stated here rather than left in the ornament notes to be found, with what it does and does not mean: v12both is a checkpoint no release ever used, so it bounds what a better corpus might have given, not what v4 took away from anyone.
+
+MLign v3 vs MLign v2, for the record: 35 wins / 18 ties / 31 losses, p = 0.36 — a tie then too. Neither v3 nor v4 is a better aligner than v2; both are the same aligner with a better ornament head, and the alignment numbers are here to show the head was not paid for out of them.
 MLign v2 vs MLign v1: **57 wins / 13 ties / 14 losses**, one-sided sign test p = 1.33e-07.
 Epoch-23 confirmation vs DualDTW: 63W / 4T / 17L, p = 1.13e-07 — the result is robust to snapshot choice within the real-validation-selected region.
 
@@ -111,15 +116,15 @@ ornament sign in the score note's attribute list, with the played notes followin
 `insertion-note` lines (`scripts/corpus/real_orn_gt.py`). They disagree, and the
 real ones are the ones that count.
 
-| holdout | v2 | v9off | v9bias | **v3** (=v9fact) |
-|---|---|---|---|---|
-| early-holdout | 0.8291 | 0.7094 | 0.6277 | 0.6530 |
-| shift-holdout | 0.7014 | 0.5137 | 0.4225 | 0.4417 |
-| orn-holdout | 0.2664 | 0.6262 | 0.5503 | 0.5660 |
-| orn-shift-holdout | 0.2628 | 0.5884 | 0.5094 | 0.5171 |
-| asap-orn-holdout (real scores, rendered) | 0.2463 | 0.5062 | 0.4743 | 0.4519 |
-| **realorn-batik** | 0.0203 | 0.1216 | 0.0216 | 0.1919 |
-| **realorn-asap** | 0.0330 | 0.3075 | 0.2236 | 0.5133 |
+| holdout | v2 | v9off | v9bias | **v3** (=v9fact) | v4 cand. (=v15fact) |
+|---|---|---|---|---|---|
+| early-holdout | 0.8291 | 0.7094 | 0.6277 | 0.6530 | 0.6942 |
+| shift-holdout | 0.7014 | 0.5137 | 0.4225 | 0.4417 | 0.4644 |
+| orn-holdout | 0.2664 | 0.6262 | 0.5503 | 0.5660 | 0.5119 |
+| orn-shift-holdout | 0.2628 | 0.5884 | 0.5094 | 0.5171 | 0.4591 |
+| asap-orn-holdout (real scores, rendered) | 0.2463 | 0.5062 | 0.4743 | 0.4519 | 0.4666 |
+| **realorn-batik** | 0.0203 | 0.1216 | 0.0216 | 0.1919 | 0.3527 |
+| **realorn-asap** | 0.0330 | 0.3075 | 0.2236 | 0.5133 | 0.5972 |
 
 The three v9 rows differ in one flag on one corpus, so ranking them is about
 the flag alone. **Every synthetic holdout puts v9off first. Both real ones put
@@ -152,6 +157,8 @@ written one. A conditioned head can only be as right as that verdict lets it be
 | v9bias | **realorn-asap** | 0.4805 | 2774 | 0.0147 | 273 | 8.96% |
 | **v3** (=v9fact) | **realorn-batik** | 0.8455 | 3605 | 0.0000 | 525 | 12.71% |
 | **v3** (=v9fact) | **realorn-asap** | 0.8173 | 2797 | 0.0000 | 250 | 8.20% |
+| v4 cand. (=v15fact) | **realorn-batik** | 0.9258 | 3667 | 0.0000 | 463 | 11.21% |
+| v4 cand. (=v15fact) | **realorn-asap** | 0.8595 | 2791 | 0.0000 | 256 | 8.40% |
 
 v3's `.0000` on the vetoed notes is **structural, not underfit**: for such a note
 the ornament side of the row is bounded by `log P(insertion)`, which is below
@@ -166,7 +173,57 @@ note, in any cell of this table — so the clamp is not quietly setting a
 downstream confidence threshold; the model is.
 
 
-### dev-long tier (train-split, never test)
+## 6b. The same head read through the decode
+
+`eval/run_attribution_decoded.py`. Once the decode has called a played note an
+insertion, `log P(matched)` is known to be zero and the head's remaining two
+factors — `gate` = P(elaborates a written note | insertion) and the ranking over
+score notes — are exactly the posterior wanted. The threshold is on their product
+at `ORNAMENT_MIN_PROB`, not on the gate alone. No retraining is involved; this is
+the same checkpoint read the way the pipeline reads it.
+
+| model | holdout | figures | group-exact | note acc | called orn. | false on matched |
+|---|---|---|---|---|---|---|
+| v3 (=v9fact) | realorn-batik | 740 | **0.3297** | 0.7862 | 4906 | 0.0923 |
+| v3 (=v9fact) | realorn-asap (clean subset) | 36 | **0.3611** | 0.5733 | 249 | 0.1084 |
+| v12both (orn2, evidenced) | realorn-batik | 740 | **0.3757** | 0.8092 | 4925 | 0.0891 |
+| v12both (orn2, evidenced) | realorn-asap (clean subset) | 36 | **0.4444** | 0.5467 | 253 | 0.1028 |
+| v15evid (orn4, evidenced) | realorn-batik | 740 | **0.4068** | 0.8119 | 4813 | 0.0885 |
+| v15evid (orn4, evidenced) | realorn-asap (clean subset) | 36 | **0.3611** | 0.5867 | 249 | 0.1044 |
+| **v4** (=v15fact, orn4, factored) | realorn-batik | 740 | **0.4784** | 0.8622 | 4817 | 0.0905 |
+| **v4** (=v15fact, orn4, factored) | realorn-asap (clean subset) | 36 | **0.5000** | 0.5867 | 244 | 0.1107 |
+
+Pooled `realorn-asap`, **not a holdout** — 92.9 % of its rows are performances
+the match head trained on, and 66 of them selected the checkpoint. Reported so
+the clean 36-figure column above is not mistaken for the whole corpus:
+
+| model | figures | group-exact |
+|---|---|---|
+| v3 (=v9fact) | 787 | 0.5909 |
+| v12both (orn2, evidenced) | 787 | 0.6620 |
+| v15evid (orn4, evidenced) | 787 | 0.6201 |
+| **v4** (=v15fact, orn4, factored) | 787 | 0.7027 |
+
+### Is the difference real?
+
+Paired bootstrap over the figures themselves rather than over performances
+(`eval/compare_attribution.py`, 20 000 resamples). Group-exact is monotone under
+attributing more notes, so the interval alone cannot separate a better predictor
+from a louder one — a louder one loses figures roughly in proportion to what it
+gains, which is why gained/lost is in the table.
+
+| base | candidate | group-exact | Δ | 95 % CI | p | gained | lost | figures |
+|---|---|---|---|---|---|---|---|---|
+| mlign-v3.pt | mlign-v4.pt | 0.3297 → 0.4784 | +0.1486 | [+0.1149, +0.1824] | 0.00005 | 145 | 35 | 740 |
+| v12both | v15evid | 0.3757 → 0.4068 | +0.0311 | [+0.0000, +0.0622] | 0.05880 | 82 | 59 | 740 |
+| v12both | v15fact | 0.3757 → 0.4784 | +0.1027 | [+0.0689, +0.1365] | 0.00005 | 124 | 48 | 740 |
+
+Rows based on `v12both` bound what a better corpus could have given.
+Only a row based on a `models/mlign-*.pt` baseline says what a user upgrading
+actually gains.
+
+
+## 7. dev-long tier (train-split, never test)
 
 | checkpoint | match F | ins F | del F |
 |---|---|---|---|
