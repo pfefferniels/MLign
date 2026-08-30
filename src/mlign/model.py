@@ -347,7 +347,7 @@ class NoteAligner(nn.Module):
             out["logits_attr"] = logits_attr
             gate = self._attr_gate(logits_attr, p_enc)
             if gate is not None:
-                out["log_attr_gate"] = gate
+                out["attr_gate_logit"] = gate
 
         return out
 
@@ -363,7 +363,14 @@ class NoteAligner(nn.Module):
         return log_ins, log_matched
 
     def _attr_gate(self, logits_attr, p_enc) -> torch.Tensor | None:
-        """log P(this played note elaborates a written note | it is an insertion).
+        """The gate LOGIT: P(elaborates a written note | insertion) before sigmoid.
+
+        Emitted un-squashed on purpose. A decoder averages it over the windows
+        covering a played note, and averaging logits then squashing is both what
+        every other logit here gets and what the browser host does. Averaging
+        `logsigmoid` instead takes a geometric mean of the probabilities, which
+        is systematically smaller by concavity and lands straight on a 0.5
+        threshold.
 
         Exported because a decoder needs it and cannot reliably rebuild it.
         `logsumexp(score columns) - log_ins` recovers it exactly under
@@ -380,7 +387,7 @@ class NoteAligner(nn.Module):
                 rank = logits_attr[..., :-1]
                 gate = gate + self.attr_gate_margin * _rank_margin(
                     rank - torch.logsumexp(rank, dim=-1, keepdim=True))
-            return F.logsigmoid(gate).squeeze(-1)
+            return gate.squeeze(-1)
         return None
 
     def _condition_attr(self, logits_attr, logits_p2s, p_enc) -> torch.Tensor:

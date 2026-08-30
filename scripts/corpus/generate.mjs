@@ -13,6 +13,12 @@
  *        [--breadth <f>]             ≥1, widens sampled <temporalSpread>
  *        [--exaggerate [modern|early]]
  *        [--imprecision subtle|natural|early]   MPM imprecisionMap humanisation
+ *        [--sign-share <p>]          kind mass on the signs realorn-* can score
+ *        [--restrike <p>]            chance an added alternation opens on the
+ *                                    principal's own pitch, the Batik shape
+ *        [--turn-lead <p>]           chance a turn opens on the principal
+ *        [--upper-start <p>]         override the trill's upper-note start rate
+ *        [--add-orn-weight <w>]      addition mass spent on multi-note figures
  *
  * The `early` settings target pre-WWII recorded style — broad arpeggiation,
  * free tempo, heavy ornamentation — which is the repertoire MLign is for, and
@@ -56,6 +62,7 @@ function parseArgs(argv) {
   const opt = {
     robustness: 'medium', jitter: 12, ornaments: 0, addRate: null, ornJitter: null, minDur: null,
     exaggerate: false, profile: 'modern', breadth: 1, imprecision: '', signShare: null,
+    restrike: 0, turnLead: 0, upperStart: null, addOrnWeight: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -72,13 +79,19 @@ function parseArgs(argv) {
     } else if (a === '--breadth') opt.breadth = Number(argv[++i]);
     else if (a === '--imprecision') opt.imprecision = argv[++i];
     else if (a === '--sign-share') opt.signShare = Number(argv[++i]);
+    else if (a === '--restrike') opt.restrike = Number(argv[++i]);
+    else if (a === '--turn-lead') opt.turnLead = Number(argv[++i]);
+    else if (a === '--upper-start') opt.upperStart = Number(argv[++i]);
+    else if (a === '--add-orn-weight') opt.addOrnWeight = Number(argv[++i]);
     else pos.push(a);
   }
   if (pos.length !== 3) {
     throw new Error(
       'usage: generate.mjs <out.jsonl> <numPieces> <seed> [--robustness p] [--jitter ms]\n' +
         '       [--ornaments rate] [--exaggerate [modern|early]] [--breadth f]\n' +
-        '       [--imprecision subtle|natural|early] [--sign-share 0..1]',
+        '       [--imprecision subtle|natural|early] [--sign-share 0..1]\n' +
+        '       [--restrike 0..1] [--turn-lead 0..1] [--upper-start 0..1]\n' +
+        '       [--add-orn-weight 0..1]',
     );
   }
   if (opt.exaggerate && !EXAG_PROFILES[opt.profile]) {
@@ -233,7 +246,7 @@ function gracePitches(rng, pitch) {
  *
  * Returns `{ header, map }`, both '' when nothing was sampled.
  */
-export function sampleOrnaments(piece, rng, rateScale, breadth = 1, kinds = ORN_KINDS) {
+export function sampleOrnaments(piece, rng, rateScale, breadth = 1, kinds = ORN_KINDS, figure = {}) {
   const part = piece.parts[0];
   const total = piece.parts.reduce((a, p) => a + p.notes.length, 0);
   // Stochastic rounding, not Math.round. A sampled piece is ~95 notes, so the
@@ -300,7 +313,7 @@ export function sampleOrnaments(piece, rng, rateScale, breadth = 1, kinds = ORN_
       index: requests.length,
     });
   }
-  return buildOrnamentation(requests, rng, { ...DEFAULTS, breadth });
+  return buildOrnamentation(requests, rng, { ...DEFAULTS, breadth, ...figure });
 }
 
 // ---------------------------------------------------------------------------
@@ -502,6 +515,13 @@ async function main() {
   const preset = PRESETS[args.robustness];
   if (!preset) throw new Error(`unknown robustness preset: ${args.robustness}`);
   const ornKinds = args.signShare === null ? ORN_KINDS : reweightKinds(ORN_KINDS, args.signShare);
+  // Figure-shape overrides, applied to the SAMPLED-piece path only. Each is
+  // read only when set, so an unflagged run renders exactly what it did before
+  // and `generate_real.mjs`, which shares both modules, is untouched.
+  const figureCfg = {
+    turnLeadProb: args.turnLead,
+    ...(args.upperStart === null ? {} : { upperStartProb: args.upperStart }),
+  };
   // The robustness layer's consonant additions land in the SAME attribution
   // channel as espressivo's ornaments — an added octave elaborates its anchor
   // exactly as a trill note does — so their rate is part of the ornament base
@@ -519,7 +539,20 @@ async function main() {
       ornamentStdMs: args.ornJitter,
       minDurMs: args.minDur ?? undefined,
     },
-    ...(args.addRate === null ? {} : { add: { ...preset.add, rate: args.addRate } }),
+    add: {
+      ...preset.add,
+      ...(args.addRate === null ? {} : { rate: args.addRate }),
+      // Written-out alternations shaped like the real recordings: landing on
+      // the principal, and opening with a re-strike of it. The espressivo path
+      // cannot express that opening, so it has to come from here.
+      ornamentLand: args.restrike > 0,
+      ornamentRestrikeProb: args.restrike,
+      ...(args.addOrnWeight === null ? {} : {
+        ornamentWeight: args.addOrnWeight,
+        octaveWeight: (1 - args.addOrnWeight) * 0.53,
+        chordToneWeight: (1 - args.addOrnWeight) * 0.47,
+      }),
+    },
   });
 
   // How this shard was made, beside the shard itself.

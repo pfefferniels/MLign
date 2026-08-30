@@ -155,13 +155,14 @@ def test_a_checkpoint_describes_itself(mode: str, attribution: bool) -> None:
 
 @pytest.mark.parametrize("mode", ["factored", "residual", "evidenced", "calibrated"])
 def test_exported_gate_is_the_gate_the_head_used(mode):
-    """`log_attr_gate` must be the very tensor the conditioning applied.
+    """`attr_gate_logit` must be the very tensor the conditioning applied.
 
-    The decode-side attribution thresholds on it, so a drift here silently
-    changes what counts as an ornament. Reconstructing it instead from
+    The decode-side attribution thresholds on its sigmoid, so a drift here
+    silently changes what counts as an ornament. Reconstructing it instead from
     `logsumexp(score columns) - log_ins` is exact only under `factored`;
     `residual` and `evidenced` feed the gate an override-augmented `log_ins`
     and that identity over-reads them, which is why the tensor is exported.
+    It is exported UNSQUASHED so a decoder can average logits across windows.
     """
     torch.manual_seed(0)
     cfg = ModelConfig(d_model=32, n_layers=1, n_heads=2, attribution=True,
@@ -174,19 +175,17 @@ def test_exported_gate_is_the_gate_the_head_used(mode):
         enc = model.encode(batch["pitch"], batch["cont"], batch["segment"],
                            batch["position"], batch["pad"])
         p_enc = enc[:, 2 + n: 2 + n + m]
-        expected = torch.nn.functional.logsigmoid(model.attr_gate(p_enc))[0, :, 0]
+        expected = model.attr_gate(p_enc)[0, :, 0]
         if mode == "calibrated":
-            rank = out["logits_attr"][:, :m, :n]
             from mlign.model import _rank_margin
-            expected = torch.nn.functional.logsigmoid(
-                model.attr_gate(p_enc)
-                + model.attr_gate_margin
-                * _rank_margin(rank - torch.logsumexp(rank, dim=-1, keepdim=True))
-            )[0, :, 0]
+            rank = out["logits_attr"][:, :m, :n]
+            expected = (model.attr_gate(p_enc)
+                        + model.attr_gate_margin
+                        * _rank_margin(rank - torch.logsumexp(rank, dim=-1, keepdim=True))
+                        )[0, :, 0]
 
-    assert "log_attr_gate" in out
-    torch.testing.assert_close(out["log_attr_gate"][0, :m], expected, rtol=1e-5, atol=1e-6)
-    assert bool((out["log_attr_gate"] <= 0).all()), "a log-probability must not exceed 0"
+    assert "attr_gate_logit" in out
+    torch.testing.assert_close(out["attr_gate_logit"][0, :m], expected, rtol=1e-5, atol=1e-6)
 
 
 def test_unconditioned_head_exports_no_gate():
@@ -196,4 +195,53 @@ def test_unconditioned_head_exports_no_gate():
                                     attribution=True, attr_conditioned="")).eval()
     with torch.no_grad():
         out = model(collate([featurize(a_row())], "cpu"))
-    assert "log_attr_gate" not in out
+    assert "attr_gate_logit" not in out
+
+
+def test_a_later_window_can_still_supply_the_anchor():
+    """Windowed accumulation must count rank per CELL, not per played note.
+
+    `sim` masks per cell; the ornament rank once masked per note, so a score
+    column that only a LATER window covered stayed at its initial value and
+    that anchor became unreachable for the rest of the piece. Two windows
+    overlapping in played notes but not in score notes is the smallest case
+    that shows it.
+    """
+    import numpy as np
+    from mlign import infer
+
+    row = {"score": [[i * 720.0, 720.0, 60 + (i % 12), 0] for i in range(8)],
+           "perf": [[i * 500.0, 400.0, 60 + (i % 12), 64] for i in range(6)],
+           "align": [], "subs": [], "ins": [], "del": []}
+
+    class TwoWindow:
+        """Scores the second half of the score only in the second window."""
+        def __init__(self): self.calls = 0
+        def __call__(self, batch):
+            n, m = int(batch["n_score"][0]), int(batch["n_perf"][0])
+            attr = torch.full((1, m, n + 1), -5.0)
+            # in window 2, played note 0 belongs strongly to its LAST score note
+            attr[0, 0, n - 1] = 10.0 if self.calls else -5.0
+            self.calls += 1
+            return {"logits_s2p": torch.zeros(1, n, m + 1),
+                    "logits_p2s": torch.zeros(1, m, n + 1),
+                    "logits_attr": attr,
+                    "attr_gate_logit": torch.full((1, m), 3.0)}
+
+    fake = TwoWindow()
+    monkey = [(0, 4, 0, 6), (4, 8, 0, 6)]     # same played notes, disjoint score
+    orig = infer.coarse_windows
+    infer.coarse_windows = lambda *a, **k: monkey
+    orig_max = infer.MAX_SINGLE_TOKENS
+    infer.MAX_SINGLE_TOKENS = 0               # force the windowed path
+    try:
+        ev = infer.accumulate(fake, row, "cpu")
+    finally:
+        infer.coarse_windows, infer.MAX_SINGLE_TOKENS = orig, orig_max
+
+    anchor, prob = ev.ornaments.anchor_of(0)
+    assert anchor == 7, f"anchor from the second window was unreachable, got {anchor}"
+    # the reported probability is the joint: gate x this anchor's share
+    gate, share = 1 / (1 + np.exp(-3.0)), np.exp(ev.ornaments.rank[0][anchor])
+    assert prob == pytest.approx(gate * share, rel=1e-6)
+    assert 0.0 < prob <= 1.0

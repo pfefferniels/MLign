@@ -41,6 +41,10 @@ export const DEFAULTS = {
   intensity: [0.55, 1.1],
   upperStartProb: 0.55,
   terminationProb: 0.45,
+  // Chance a turn opens on the principal's own slot. Off by default: it is a
+  // deliberate move toward the Batik grammar and the real-score generator,
+  // which shares this module, is already faithful to its own repertoire.
+  turnLeadProb: 0,
   anticipationProb: 0.15,
   gracePrincipalShare: [0.25, 0.55], // appoggiatura: how much of the principal it takes
   acciaccaturaShare: [0.06, 0.16],
@@ -151,7 +155,11 @@ function turn(rng, cfg, { id }, inverted, delayed) {
   const pool =
     `<note xml:id="u" interval.chromatic="${up}.0" />` +
     `<note xml:id="l" interval.chromatic="-${down}.0" />`;
-  const order = inverted ? `#l #${id} #u #${id}` : `#u #${id} #l #${id}`;
+  // A turn that follows the principal rather than leading into it: Batik's
+  // commonest four-note figure is P U P L P. Unlike a repeated principal, this
+  // opening survives MPM expansion, which collapses equal adjacent pitches.
+  const lead = cfg.turnLeadProb > 0 && rng.nextDouble() < cfg.turnLeadProb ? `#${id} ` : '';
+  const order = lead + (inverted ? `#l #${id} #u #${id}` : `#u #${id} #l #${id}`);
   // A delayed turn sits in the second half of the note; MPM's way of saying
   // that is to hang the frame off the note's end.
   const alignment = delayed || rng.nextDouble() < 0.2 ? 'at end' : 'at start';

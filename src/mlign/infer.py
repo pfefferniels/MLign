@@ -24,10 +24,14 @@ MAX_SINGLE_TOKENS = 2000
 WIN_SCORE = 384  # score notes per window
 MARGIN_SEC = 3.0
 UNCOVERED_NULL = 1e9  # null logit for a note no window covered
-# gate is P(elaborates a written note | insertion), so its own .5 is the
-# decision boundary — a slip or a repeat restart is an insertion that
-# elaborates nothing.
-ORNAMENT_MIN_PROB = 0.5
+# The threshold is on the JOINT posterior, P(this anchor is right | insertion)
+# = gate x share: the head may be sure a note elaborates SOMETHING while unable
+# to say what, and asserting a specific anchor there is the error worth
+# avoiding. Measured on both real corpora against the gate alone at .5, the
+# joint rule at .2 is better on all four numbers at once — batik group-exact
+# .3730 -> .3757 and asap .6595 -> .6620, while notes wrongly called ornaments
+# fall .0902 -> .0891 and .0779 -> .0533.
+ORNAMENT_MIN_PROB = 0.2
 
 
 @dataclass(frozen=True)
@@ -53,8 +57,14 @@ class Ornaments:
     log_gate: np.ndarray  # (m,)   log P(elaborates something | this is an insertion)
 
     def anchor_of(self, j: int) -> tuple[int, float]:
-        """Best anchor for played note `j`, and P(it ornaments at all)."""
-        return int(self.rank[j].argmax()), float(np.exp(self.log_gate[j]))
+        """Best anchor for played note `j`, and P(that anchor is right | insertion).
+
+        The two factors answer different questions — `log_gate` whether the note
+        elaborates anything, `rank` which note — and the product is the claim
+        actually being made.
+        """
+        i = int(self.rank[j].argmax())
+        return i, float(np.exp(self.log_gate[j] + self.rank[j][i]))
 
 
 @dataclass(frozen=True)
@@ -106,8 +116,9 @@ def accumulate(model, row: dict, device: str) -> Evidence:
     null_s_cnt = np.zeros(n, dtype=np.float32)
     null_p = np.zeros(m, dtype=np.float32)
     null_p_cnt = np.zeros(m, dtype=np.float32)
-    rank = np.full((m, n), -1e9, dtype=np.float32)
-    log_gate = np.zeros(m, dtype=np.float32)
+    rank = np.zeros((m, n), dtype=np.float32)
+    rank_cnt = np.zeros((m, n), dtype=np.float32)
+    gate_logit = np.zeros(m, dtype=np.float32)
     attr_cnt = np.zeros(m, dtype=np.float32)
 
     for s0, s1, p0, p1 in pairs:
@@ -140,19 +151,21 @@ def accumulate(model, row: dict, device: str) -> Evidence:
             continue
         full = lattr[0].float().cpu().numpy()[:mp, : ns + 1]
         cols = full[:, :ns]
-        lgate = out.get("log_attr_gate")
+        lgate = out.get("attr_gate_logit")
         if lgate is not None:
             block_gate = lgate[0].float().cpu().numpy()[:mp]
         else:
             # An unconditioned head carries no match-head factor to divide out,
-            # so its own none column already answers the question.
-            block_gate = _logsumexp(cols, axis=1) - _logsumexp(full, axis=1)
-        region = rank[p0:p1, s0:s1]
-        first = attr_cnt[p0:p1] == 0
-        region[first] = 0.0
-        region += cols - _logsumexp(cols, axis=1)[:, None]
-        rank[p0:p1, s0:s1] = region
-        log_gate[p0:p1] += block_gate
+            # so its own none column already answers the question. Back to a
+            # logit so it averages on the same scale as a real gate.
+            p_orn = _logsumexp(cols, axis=1) - _logsumexp(full, axis=1)
+            block_gate = p_orn - np.log1p(-np.exp(np.minimum(p_orn, -1e-7)))
+        # Counted per CELL, like `sim` above and unlike a per-note mask: a score
+        # column a LATER window is the first to cover must not be left at its
+        # initial value, or that anchor becomes unreachable for the whole note.
+        rank[p0:p1, s0:s1] += cols - _logsumexp(cols, axis=1)[:, None]
+        rank_cnt[p0:p1, s0:s1] += 1.0
+        gate_logit[p0:p1] += block_gate
         attr_cnt[p0:p1] += 1.0
 
     cnt[cnt == 0] = 1.0
@@ -165,11 +178,13 @@ def accumulate(model, row: dict, device: str) -> Evidence:
 
     orn = None
     if attr_cnt.any():
-        seen = np.maximum(attr_cnt, 1.0)
-        rank = rank / seen[:, None]
+        rank = np.where(rank_cnt > 0, rank / np.maximum(rank_cnt, 1.0), -1e9)
+        # averaging rows with unequal cell counts leaves them un-normalized
+        rank = rank - _logsumexp(rank, axis=1)[:, None]
         # a note no window scored cannot be attributed to anything
         rank[attr_cnt == 0] = -1e9
-        log_gate = np.where(attr_cnt == 0, -1e9, log_gate / seen)
+        mean_gate = gate_logit / np.maximum(attr_cnt, 1.0)
+        log_gate = np.where(attr_cnt == 0, -1e9, -np.logaddexp(0.0, -mean_gate))
         orn = Ornaments(rank=rank, log_gate=log_gate)
     return Evidence(sim=sim, null_s=null_s, null_p=null_p, ornaments=orn)
 
@@ -228,7 +243,8 @@ def coarse_windows(row: dict, n: int, m: int) -> list[tuple[int, int, int, int]]
 
 def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
            anchor_conf: float = 0.35, tol_sec: float = 1.0,
-           ornaments: Ornaments | None = None) -> list[dict]:
+           ornaments: Ornaments | None = None,
+           ornament_min_prob: float = ORNAMENT_MIN_PROB) -> list[dict]:
     n, m = sim.shape
     s_pitch = np.array([r[2] for r in row["score"]], dtype=int)
     p_pitch = np.array([r[2] for r in row["perf"]], dtype=int)
@@ -364,7 +380,7 @@ def decode(row: dict, sim: np.ndarray, null_s: np.ndarray, null_p: np.ndarray,
             ins = {"label": "insertion", "perf_idx": j, "confidence": null_share}
             if ornaments is not None:
                 anchor, prob = ornaments.anchor_of(j)
-                if prob >= ORNAMENT_MIN_PROB:
+                if prob >= ornament_min_prob:
                     ins["ornament"] = {"anchor_score_idx": anchor, "confidence": prob}
             triples.append(ins)
     return triples

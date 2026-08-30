@@ -44,6 +44,9 @@ export const defaultConfig = Object.freeze({
     octaveWeight: 0.45, chordToneWeight: 0.4, ornamentWeight: 0.15,
     spreadMs: 18, velScale: [0.8, 1.1],
     ornamentNotes: [2, 4], ornamentStepMs: [28, 65],
+    // Shape of a written-out alternation. Off by default: the real-score
+    // generator shares this layer and its figures already match real ASAP.
+    ornamentLand: false, ornamentRestrikeProb: 0,
   },
   substitute: { rate: 0, octaveWeight: 0.15 },
   shift: { rate: 0, stdMs: 35, hesitationP: 0.15, hesitationMs: [90, 300] },
@@ -410,10 +413,12 @@ function chordTone(note, rng, sounding) {
 function ornamentFigure(note, cfg, rng) {
   const upper = randint(rng, 1, 2); // chromatic 1–2 ≈ the diatonic neighbour
   const turn = chance(rng, 0.35);
-  const offsets = turn
-    ? [upper, 0, -upper] // …resolving onto the anchor
-    : Array.from({ length: randint(rng, cfg.ornamentNotes[0], cfg.ornamentNotes[1]) },
-      (_, k) => (k % 2 === 0 ? upper : 0));
+  const offsets = cfg.ornamentLand
+    ? landing(rng, cfg, upper, turn)
+    : turn
+      ? [upper, 0, -upper] // …resolving onto the anchor
+      : Array.from({ length: randint(rng, cfg.ornamentNotes[0], cfg.ornamentNotes[1]) },
+        (_, k) => (k % 2 === 0 ? upper : 0));
   const step = uniform(rng, cfg.ornamentStepMs[0], cfg.ornamentStepMs[1]);
 
   const out = [];
@@ -426,7 +431,7 @@ function ornamentFigure(note, cfg, rng) {
     };
     added.pitch = clampPitch(note.pitch + semitones);
     // Turns lead into the anchor, alternations follow its attack.
-    added.milliseconds.date = turn
+    added.milliseconds.date = turn && !cfg.ornamentLand
       ? note.milliseconds.date - (offsets.length - slot) * step
       : note.milliseconds.date + (slot + 1) * step;
     added.milliseconds.end = added.milliseconds.date + Math.max(20, step * uniform(rng, 0.55, 0.95));
@@ -434,6 +439,25 @@ function ornamentFigure(note, cfg, rng) {
     out.push(added);
   });
   return out;
+}
+
+/**
+ * Pitch offsets of one written-out alternation, from the anchor.
+ *
+ * `ornamentLand` spells the figure as (neighbour, principal) pairs so it ends
+ * on the principal, which every common shape in the Batik recordings does;
+ * `ornamentRestrikeProb` opens it with a repeat of the principal. That opening
+ * is the one shape the espressivo path cannot express, because MPM expansion
+ * collapses consecutive slots of equal pitch (ornamentExpansion.ts, rule 5).
+ */
+function landing(rng, cfg, upper, turn) {
+  const restrike = cfg.ornamentRestrikeProb > 0 && chance(rng, cfg.ornamentRestrikeProb);
+  const body = turn
+    ? [upper, 0, -upper, 0]
+    : Array.from(
+      { length: Math.max(1, randint(rng, cfg.ornamentNotes[0], cfg.ornamentNotes[1]) >> 1) },
+      () => [upper, 0]).flat();
+  return restrike ? [0, ...body] : body;
 }
 
 /** Onset-sorted flat view of the notes, for the harmony query. */
