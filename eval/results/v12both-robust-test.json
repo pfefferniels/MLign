@@ -8,7 +8,7 @@
     "n": 84,
     "failures": 0,
     "aligner": "model:runs/v12both/best.pt",
-    "seconds": 1463.9
+    "seconds": 1253.2
   },
   "rows": [
     {

@@ -1,0 +1,22 @@
+{
+  "rows": 4000,
+  "detect_p": 0.9513,
+  "detect_r": 0.9035,
+  "detect_f": 0.9268,
+  "attr_acc": 0.7734,
+  "attr_n": 9838,
+  "group_exact": 0.6144,
+  "group_n": 3999,
+  "by_match_head": {
+    "flagged_acc": 0.8255,
+    "flagged_n": 9208,
+    "vetoed_acc": 0.0127,
+    "vetoed_n": 630,
+    "veto_share": 0.064,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.1852
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/orn-shift-holdout.jsonl",
+  "tier": "synthetic-only"
+}

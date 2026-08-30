@@ -64,7 +64,9 @@ def paired_bootstrap(base: np.ndarray, cand: np.ndarray, resamples: int, seed: i
     rng = np.random.default_rng(seed)
     draws = diff[rng.integers(0, len(diff), size=(resamples, len(diff)))].mean(axis=1)
     lo, hi = np.percentile(draws, [2.5, 97.5])
-    p = 2 * min((draws <= 0).mean(), (draws >= 0).mean())
+    # min(1, ...): on an exact tie every draw is 0, both tails are 1.0, and the
+    # doubling would print 2 — in precisely the case someone most needs to read.
+    p = min(1.0, 2 * min((draws <= 0).mean(), (draws >= 0).mean()))
     return {
         "figures": len(diff),
         "base": round(float(base.mean()), 4),

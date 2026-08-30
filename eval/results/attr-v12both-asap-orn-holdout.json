@@ -1,0 +1,22 @@
+{
+  "rows": 1689,
+  "detect_p": 0.9505,
+  "detect_r": 0.8532,
+  "detect_f": 0.8992,
+  "attr_acc": 0.6792,
+  "attr_n": 3734,
+  "group_exact": 0.5304,
+  "group_n": 1693,
+  "by_match_head": {
+    "flagged_acc": 0.7478,
+    "flagged_n": 3390,
+    "vetoed_acc": 0.0029,
+    "vetoed_n": 344,
+    "veto_share": 0.0921,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.2524
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/asap-orn-holdout.jsonl",
+  "tier": "synthetic-only"
+}

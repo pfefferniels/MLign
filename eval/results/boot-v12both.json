@@ -1,0 +1,17 @@
+{
+  "figures": 740,
+  "base": 0.3757,
+  "cand": 0.3757,
+  "diff": 0.0,
+  "ci95": [
+    0.0,
+    0.0
+  ],
+  "p": 2.0,
+  "gained": 0,
+  "lost": 0,
+  "base_ckpt": "runs/v12both/best.pt",
+  "cand_ckpt": "runs/v12both/best.pt",
+  "corpus": "batik",
+  "clean_only": false
+}

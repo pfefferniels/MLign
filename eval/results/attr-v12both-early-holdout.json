@@ -1,0 +1,22 @@
+{
+  "rows": 2000,
+  "detect_p": 0.9787,
+  "detect_r": 0.9452,
+  "detect_f": 0.9617,
+  "attr_acc": 0.9068,
+  "attr_n": 77218,
+  "group_exact": 0.7327,
+  "group_n": 19726,
+  "by_match_head": {
+    "flagged_acc": 0.9454,
+    "flagged_n": 74014,
+    "vetoed_acc": 0.0147,
+    "vetoed_n": 3204,
+    "veto_share": 0.0415,
+    "log_ins_floored": 0.0,
+    "log_ins_mean": -0.1185
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/early-holdout.jsonl",
+  "tier": "synthetic-only"
+}

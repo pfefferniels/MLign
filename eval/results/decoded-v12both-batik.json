@@ -1,0 +1,67 @@
+{
+  "notes": 4130,
+  "note_acc": 0.8092,
+  "groups": 740,
+  "group_exact": 0.3757,
+  "called_match_by_decode": 0.0748,
+  "called_ornament": 4925,
+  "false_on_matched": 0.0891,
+  "clean_only": {
+    "notes": 4130,
+    "note_acc": 0.8092,
+    "groups": 740,
+    "group_exact": 0.3757,
+    "called_ornament": 4925,
+    "false_on_matched": 0.0891
+  },
+  "seen_in_training": {
+    "notes": 0,
+    "note_acc": 0.0,
+    "groups": 0,
+    "group_exact": 0.0,
+    "called_ornament": 0,
+    "false_on_matched": 0.0
+  },
+  "by_size": {
+    "1": {
+      "groups": 18,
+      "group_exact": 0.2222
+    },
+    "2": {
+      "groups": 231,
+      "group_exact": 0.5758
+    },
+    "3": {
+      "groups": 131,
+      "group_exact": 0.0992
+    },
+    "4": {
+      "groups": 121,
+      "group_exact": 0.5372
+    },
+    "5": {
+      "groups": 30,
+      "group_exact": 0.1333
+    },
+    "6": {
+      "groups": 32,
+      "group_exact": 0.625
+    },
+    "7": {
+      "groups": 11,
+      "group_exact": 0.0909
+    },
+    "8": {
+      "groups": 40,
+      "group_exact": 0.425
+    },
+    "9+": {
+      "groups": 126,
+      "group_exact": 0.1667
+    }
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/realorn-batik.jsonl",
+  "rows": 225,
+  "min_prob": 0.2
+}

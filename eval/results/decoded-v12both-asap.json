@@ -1,0 +1,67 @@
+{
+  "notes": 3047,
+  "note_acc": 0.7778,
+  "groups": 787,
+  "group_exact": 0.662,
+  "called_match_by_decode": 0.0597,
+  "called_ornament": 4672,
+  "false_on_matched": 0.0533,
+  "clean_only": {
+    "notes": 75,
+    "note_acc": 0.5467,
+    "groups": 36,
+    "group_exact": 0.4444,
+    "called_ornament": 253,
+    "false_on_matched": 0.1028
+  },
+  "seen_in_training": {
+    "notes": 2972,
+    "note_acc": 0.7836,
+    "groups": 751,
+    "group_exact": 0.6724,
+    "called_ornament": 4419,
+    "false_on_matched": 0.0505
+  },
+  "by_size": {
+    "1": {
+      "groups": 63,
+      "group_exact": 0.5079
+    },
+    "2": {
+      "groups": 272,
+      "group_exact": 0.8015
+    },
+    "3": {
+      "groups": 127,
+      "group_exact": 0.6772
+    },
+    "4": {
+      "groups": 80,
+      "group_exact": 0.325
+    },
+    "5": {
+      "groups": 127,
+      "group_exact": 0.7953
+    },
+    "6": {
+      "groups": 17,
+      "group_exact": 0.2941
+    },
+    "7": {
+      "groups": 42,
+      "group_exact": 0.5714
+    },
+    "8": {
+      "groups": 8,
+      "group_exact": 0.25
+    },
+    "9+": {
+      "groups": 51,
+      "group_exact": 0.5294
+    }
+  },
+  "ckpt": "runs/v12both/best.pt",
+  "corpus": "data/corpus/realorn-asap.jsonl",
+  "rows": 225,
+  "min_prob": 0.2
+}
