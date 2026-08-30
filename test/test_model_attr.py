@@ -153,38 +153,57 @@ def test_a_checkpoint_describes_itself(mode: str, attribution: bool) -> None:
     NoteAligner(rebuilt).load_state_dict(state)  # strict: raises if a head is missing
 
 
-@pytest.mark.parametrize("mode", ["factored", "residual", "evidenced", "calibrated"])
-def test_exported_gate_is_the_gate_the_head_used(mode):
-    """`attr_gate_logit` must be the very tensor the conditioning applied.
+@pytest.mark.parametrize("mode", ["factored", "calibrated"])
+def test_exported_gate_round_trips_through_the_conditioning(mode):
+    """The exported gate must reproduce the score columns it was applied to.
 
-    The decode-side attribution thresholds on its sigmoid, so a drift here
-    silently changes what counts as an ornament. Reconstructing it instead from
-    `logsumexp(score columns) - log_ins` is exact only under `factored`;
-    `residual` and `evidenced` feed the gate an override-augmented `log_ins`
-    and that identity over-reads them, which is why the tensor is exported.
-    It is exported UNSQUASHED so a decoder can average logits across windows.
+    Asserting it against a restatement of its own formula proves nothing: two
+    copies of one expression agree with each other however wrong both are. The
+    conditioning writes `log_ins + logsigmoid(gate) + log_rank` into the score
+    columns and `log_rank` is normalised, so
+
+        logsumexp(score columns) - log_ins == logsigmoid(gate)
+
+    holds exactly for the modes that leave `log_ins` alone, which pins the
+    export end to end. `residual` and `evidenced` augment `log_ins` with the
+    override and are excluded here; since `_condition_attr` now returns the gate
+    it used, they cannot diverge from it by construction.
+
+    The margin is forced away from its zero init, or `calibrated` would be
+    testing `factored`.
     """
     torch.manual_seed(0)
     cfg = ModelConfig(d_model=32, n_layers=1, n_heads=2, attribution=True,
                       attr_conditioned=mode)
     model = NoteAligner(cfg).eval()
+    if mode == "calibrated":
+        with torch.no_grad():
+            model.attr_gate_margin.fill_(1.7)
+    batch = collate([featurize(a_row())], "cpu")
+    with torch.no_grad():
+        out = model(batch)
+        n, m = int(batch["n_score"][0]), int(batch["n_perf"][0])
+        log_ins, _ = model._match_evidence(out["logits_p2s"][:, :m])
+
+    cols = out["logits_attr"][0, :m, :n]
+    applied = torch.logsumexp(cols, dim=-1) - log_ins[0, :, 0]
+    exported = torch.nn.functional.logsigmoid(out["attr_gate_logit"][0, :m])
+    torch.testing.assert_close(applied, exported, rtol=1e-4, atol=1e-5)
+
+
+@pytest.mark.parametrize("mode", ["residual", "evidenced"])
+def test_override_modes_still_export_the_applied_gate(mode):
+    """These augment `log_ins`, so only the identity above fails, not the gate."""
+    torch.manual_seed(0)
+    model = NoteAligner(ModelConfig(d_model=32, n_layers=1, n_heads=2,
+                                    attribution=True, attr_conditioned=mode)).eval()
     batch = collate([featurize(a_row())], "cpu")
     with torch.no_grad():
         out = model(batch)
         n, m = int(batch["n_score"][0]), int(batch["n_perf"][0])
         enc = model.encode(batch["pitch"], batch["cont"], batch["segment"],
                            batch["position"], batch["pad"])
-        p_enc = enc[:, 2 + n: 2 + n + m]
-        expected = model.attr_gate(p_enc)[0, :, 0]
-        if mode == "calibrated":
-            from mlign.model import _rank_margin
-            rank = out["logits_attr"][:, :m, :n]
-            expected = (model.attr_gate(p_enc)
-                        + model.attr_gate_margin
-                        * _rank_margin(rank - torch.logsumexp(rank, dim=-1, keepdim=True))
-                        )[0, :, 0]
-
-    assert "attr_gate_logit" in out
+        expected = model.attr_gate(enc[:, 2 + n: 2 + n + m])[0, :, 0]
     torch.testing.assert_close(out["attr_gate_logit"][0, :m], expected, rtol=1e-5, atol=1e-6)
 
 

@@ -37,6 +37,17 @@ from run_attribution import load_model  # noqa: E402
 
 NOT_ATTRIBUTED = -1
 
+# realorn-asap is 92.9 % performances the match head trained on (143 rows from
+# realgt-train, 66 from realgt-val, which also selected the checkpoint). Pooled
+# ASAP numbers are therefore not a holdout. realorn-batik has zero overlap.
+_SEEN = json.loads((ROOT / "eval/realgt-performances.json").read_text())["performances"]
+SEEN_PERFORMANCES = frozenset(_SEEN)
+
+
+def is_clean(row: dict) -> bool:
+    """True when no MLign run has trained or selected on this performance."""
+    return str(row.get("meta", {}).get("piece", "")) not in SEEN_PERFORMANCES
+
 
 def truth(row: dict) -> dict[int, int]:
     """Played-note index → anchor score index, for the notes this row can score.
@@ -74,6 +85,19 @@ def predict(model, row: dict, device: str, min_prob: float) -> dict[int, int]:
     return out
 
 
+def score(records: list[tuple]) -> dict:
+    """Aggregate (hit, total, exact, groups, called, false) tuples."""
+    hit = tot = exact = groups = called = false = 0
+    for h, t, e, g, c, f in records:
+        hit += h; tot += t; exact += e; groups += g; called += c; false += f
+    return {
+        "notes": tot, "note_acc": round(hit / max(tot, 1), 4),
+        "groups": groups, "group_exact": round(exact / max(groups, 1), 4),
+        "called_ornament": called,
+        "false_on_matched": round(false / max(called, 1), 4),
+    }
+
+
 def evaluate(model, rows: list[dict], device: str, min_prob: float) -> dict:
     hit = tot = 0
     exact = groups = 0
@@ -82,6 +106,7 @@ def evaluate(model, rows: list[dict], device: str, min_prob: float) -> dict:
     by_size_exact: collections.Counter = collections.Counter()
 
     called_orn = false_orn = 0
+    per_row: list[tuple] = []
     for row in rows:
         gt = truth(row)
         if not gt:
@@ -98,9 +123,19 @@ def evaluate(model, rows: list[dict], device: str, min_prob: float) -> dict:
             got = pred.get(pi, NOT_ATTRIBUTED)
             hit += got == anchor
             lost_to_match += pi not in pred
+        r_hit = sum(pred.get(pi, NOT_ATTRIBUTED) == a for pi, a in gt.items())
+        r_called = sum(1 for pi, a in pred.items()
+                       if a != NOT_ATTRIBUTED)
+        r_false = sum(1 for pi, a in pred.items()
+                      if a != NOT_ATTRIBUTED and pi in plain)
+        r_exact = r_groups = 0
         figures: dict[int, list[int]] = collections.defaultdict(list)
         for pi, anchor in gt.items():
             figures[anchor].append(pi)
+        for anchor, pis in figures.items():
+            r_groups += 1
+            r_exact += all(pred.get(pi, NOT_ATTRIBUTED) == anchor for pi in pis)
+        per_row.append((r_hit, len(gt), r_exact, r_groups, r_called, r_false, is_clean(row)))
         for anchor, pis in figures.items():
             groups += 1
             ok = all(pred.get(pi, NOT_ATTRIBUTED) == anchor for pi in pis)
@@ -119,6 +154,9 @@ def evaluate(model, rows: list[dict], device: str, min_prob: float) -> dict:
         # of everything the pipeline called an ornament, the share that is a
         # note the match file says was matched, so certainly not one
         "false_on_matched": round(false_orn / max(called_orn, 1), 4),
+        # The only number on this corpus that is a genuine holdout.
+        "clean_only": score([r[:6] for r in per_row if r[6]]),
+        "seen_in_training": score([r[:6] for r in per_row if not r[6]]),
         "by_size": {("9+" if s == 9 else str(s)): {
             "groups": by_size[s],
             "group_exact": round(by_size_exact[s] / by_size[s], 4),

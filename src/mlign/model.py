@@ -342,12 +342,11 @@ class NoteAligner(nn.Module):
             logits_attr = torch.cat([attr, none_col], dim=2) * self.attr_scale
             logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
             if self.cfg.attr_conditioned:
-                logits_attr = self._condition_attr(logits_attr, logits_p2s, p_enc)
+                logits_attr, gate = self._condition_attr(logits_attr, logits_p2s, p_enc)
                 logits_attr = logits_attr.masked_fill(s_pad_col, float("-inf"))
+                if gate is not None:
+                    out["attr_gate_logit"] = gate.squeeze(-1)
             out["logits_attr"] = logits_attr
-            gate = self._attr_gate(logits_attr, p_enc)
-            if gate is not None:
-                out["attr_gate_logit"] = gate
 
         return out
 
@@ -362,41 +361,23 @@ class NoteAligner(nn.Module):
         log_matched = torch.logsumexp(lp[..., :-1], dim=-1, keepdim=True).clamp(min=self.LOG_FLOOR)
         return log_ins, log_matched
 
-    def _attr_gate(self, logits_attr, p_enc) -> torch.Tensor | None:
-        """The gate LOGIT: P(elaborates a written note | insertion) before sigmoid.
+    def _condition_attr(self, logits_attr, logits_p2s, p_enc):
+        """Returns (conditioned logits, the gate LOGIT actually applied).
 
-        Emitted un-squashed on purpose. A decoder averages it over the windows
-        covering a played note, and averaging logits then squashing is both what
-        every other logit here gets and what the browser host does. Averaging
-        `logsigmoid` instead takes a geometric mean of the probabilities, which
-        is systematically smaller by concavity and lands straight on a 0.5
-        threshold.
-
-        Exported because a decoder needs it and cannot reliably rebuild it.
-        `logsumexp(score columns) - log_ins` recovers it exactly under
-        `factored`, but `residual` and `evidenced` feed the gate an
-        override-augmented `log_ins`, so that identity over-reads them — on
-        v12both by +0.32 nats on average and up to +3.3 on exactly the vetoed
-        notes, flipping 13.8 % of threshold decisions. Emitting it removes the
-        guesswork, costs no parameter, and needs no retraining: every trained
-        checkpoint already computes this tensor.
+        The gate is handed back rather than recomputed by a second method,
+        because a decoder thresholds on it and two copies of the same formula
+        can only be tested against each other. It leaves un-squashed: a decoder
+        averages it over the windows covering a played note, and averaging
+        logits then squashing is both what every other logit here gets and what
+        the browser host does. Averaging `logsigmoid` takes a geometric mean of
+        the probabilities, smaller by concavity and right on the threshold.
         """
-        if self.cfg.attr_conditioned in ("factored", "residual", "evidenced", "calibrated"):
-            gate = self.attr_gate(p_enc)
-            if self.cfg.attr_conditioned == "calibrated":
-                rank = logits_attr[..., :-1]
-                gate = gate + self.attr_gate_margin * _rank_margin(
-                    rank - torch.logsumexp(rank, dim=-1, keepdim=True))
-            return gate.squeeze(-1)
-        return None
-
-    def _condition_attr(self, logits_attr, logits_p2s, p_enc) -> torch.Tensor:
         log_ins, log_matched = self._match_evidence(logits_p2s)
         if self.cfg.attr_conditioned == "bias":
             return torch.cat(
                 [logits_attr[..., :-1], logits_attr[..., -1:] + self.attr_cond_w * log_matched],
                 dim=-1,
-            )
+            ), None
         # "factored": the head keeps only the question it is good at — the
         # ranking over score notes — while "is this an ornament at all" becomes
         # P(insertion) (match head, real-data-calibrated) times a learned
@@ -444,7 +425,7 @@ class NoteAligner(nn.Module):
             [log_ins + F.logsigmoid(gate) + log_rank,
              _logaddexp(log_ins + F.logsigmoid(-gate), log_rest)],
             dim=-1,
-        )
+        ), gate
 
 
 def alignment_loss(out: dict, batch: dict, weight_attr: float = 0.2) -> tuple[torch.Tensor, dict]:
